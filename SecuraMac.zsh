@@ -4,13 +4,13 @@
 #
 # SecuraMac
 #
-# Purpose: SecuraMac simplifies macOS security, offering quick and effective tools to fortify your 
-# system and ensure protection. 
+# Purpose: SecuraMac simplifies macOS security, offering quick and effective tools to fortify your
+# system and ensure protection.
 #
 # https://github.com/cocopuff2u
 #
 ####################################################################################################
-# 
+#
 # HISTORY
 #
 # 1.0 09/04/24 - Master Release
@@ -152,7 +152,7 @@ print_rainbow() {
     local text="$1"
     local i=0
     local colors=("$RED" "$YELLOW" "$GREEN" "$CYAN" "$WHITE" "$MAGENTA")
-    
+
     for ((i=0; i<${#text}; i++)); do
         eval "${colors[$((i % 6))]}"
         printf "%s" "${text:$i:1}"
@@ -165,7 +165,7 @@ print_rainbow() {
 clear
 
 intro_logo() {
-    # ASCII Logo with SecuraMac 
+    # ASCII Logo with SecuraMac
     print_green_bold "                                                                                "
     print_green_bold "┌──────────────────────────────────────────────────────────────────────────────┐"
     print_green_bold "│                                                                              │"
@@ -188,9 +188,9 @@ intro_logo() {
 
 intro_logo
 
-print_orange "##############################" 
+print_orange "##############################"
 print_orange "# BEFORE PROCEEDING"
-print_orange "##############################"  
+print_orange "##############################"
 print_orange ""
 print_orange "      1. Maximize Terminal Window to Full Screen or Largest Possible Size"
 print_orange "      2. Verify terminal has full disk access"
@@ -199,8 +199,8 @@ print_orange ""
 print_orange ""
 print_orange "I have confirmed and i want to proceed:"
 print_orange "1. Yes"
-print_orange "2. No" 
-print_orange "" 
+print_orange "2. No"
+print_orange ""
 
 # Loop until a valid choice is made
 while true; do
@@ -232,19 +232,23 @@ done
 if sudo test -r "/Library/Application Support/com.apple.TCC/TCC.db" 2>/dev/null; then
     intro_logo
 else
+    intro_logo
+    print_bright_red_bold "##############################"
     print_bright_red_bold "Terminal does not have Full Disk Access."
+    print_bright_red_bold "##############################"
     print_bright_red_bold "Please grant Full Disk Access to Terminal by following these steps:"
     print_bright_red_bold "1. Open System Settings."
     print_bright_red_bold "2. Go to Privacy & Security > Full Disk Access."
     print_bright_red_bold "3. Click the '+' button and add Terminal from /Applications/Utilities."
     print_bright_red_bold "4. If prompted, enter your password to make changes."
     print_bright_red_bold "5. Restart Terminal for the changes to take effect."
-    exit 0
+    print_bright_red_bold ""
+    print_bright_red_bold ""
 fi
 
-print_green "##############################" 
+print_green "##############################"
 print_green "# Please select an option:"
-print_green "##############################" 
+print_green "##############################"
 print_green ""
 print_green "1. Perform Full SecuraMac (Runs Full Security Options)"
 print_green "2. Perform Log SecuraMac (Runs Only Logging Security Options)"
