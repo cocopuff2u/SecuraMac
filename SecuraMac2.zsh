@@ -1,35 +1,69 @@
-if ! plutil -lint /Library/Preferences/com.apple.SoftwareUpdate.plist >/dev/null 2>&1; then
-    print_bright_red_bold "Terminal does not have Full Disk Access."
-    print_bright_red_bold "Please grant Full Disk Access to Terminal by following these steps:"
-    print_bright_red_bold "1. Open System Preferences."
-    print_bright_red_bold "2. Go to Privacy & Security > Full Disk Access."
-    print_bright_red_bold "3. Click the lock icon to make changes (you may need to enter your password)."
-    print_bright_red_bold "4. Click the '+' button and add Terminal from /Applications/Utilities."
-    print_bright_red_bold "5. Restart Terminal for the changes to take effect."
-    exit 0
-fi
+execute_and_log() {
+    local rule_name="$1"
+    local rule_recommend="$2"
+    local rule_description="$3"
+    local rule_check="$4"
+    local rule_result="$5"
+    local rule_enable="$6"
+    local rule_disable="$7"
 
-#!/bin/zsh
+    # Check the current status
+    local status_check=$(eval "$rule_check")
 
-# Define the file to check
-FILE="/Library/Application Support/com.apple.TCC/TCC.db"
+    if [[ "$status_check" == "$rule_result" ]]; then
+        current_status="enabled"
+    else
+        current_status="disabled"
+    fi
 
-# Attempt to check read access to the file and capture output and errors
-OUTPUT=$(sudo test -r "$FILE" 2>&1)
-EXIT_STATUS=$?
+    echo "Rule: $rule_name"
+    echo "Current Status: $current_status"
+    echo "{?} $rule_description"
 
-if [[ $EXIT_STATUS -ne 0 ]]; then
-  if [[ $EXIT_STATUS -eq 1 ]]; then
-    # Check if it's a permission error
-    echo "This script requires Full Disk Access."
-    echo "Add Terminal to the Full Disk Access list in System Preferences > Privacy & Security."
-    echo "Quit Terminal and re-run this script after granting Full Disk Access."
-  else
-    # Other errors
-    echo "Error accessing the file: $FILE"
-    echo "Error details: $OUTPUT"
-  fi
-else
-  # File accessed successfully
-  echo "Terminal has Full Disk Access."
-fi
+    local attempt=1
+    local max_attempts=3
+
+    while [[ $attempt -le $max_attempts ]]; do
+        read -p "$rule_recommend (Yes/No)? " user_input
+
+        case "$user_input" in
+            1|y|Y|yes|YES)
+                echo "Enabling the rule..."
+                eval "$rule_enable"
+                echo "Rule has been enabled."
+                return
+                ;;
+            2|n|N|no|NO)
+                echo "No changes made."
+                return
+                ;;
+            *)
+                if [[ $attempt -lt $max_attempts ]]; then
+                    echo "Invalid input. Please enter 'Yes' or 'No'."
+                else
+                    echo "Invalid input. Defaulting to 'No'."
+                    echo "No changes made."
+                fi
+                ;;
+        esac
+        ((attempt++))
+    done
+}
+
+echo "##############################################"
+echo "# FIREWALL RULES"
+echo "##############################################"
+echo ""
+echo ""
+
+# Firewall Rules
+##############################################
+Rule_Name="Firewall"
+Rule_Recommend="Do you want to enable this rule?"
+Rule_Description="This helps protect your Mac from being attacked over the internet"
+Rule_Check='sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate | grep -q "enabled" && echo "true" || echo "false"'
+Rule_Result="true"
+Rule_Enable="sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on"
+Rule_Disable="sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off"
+
+execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
