@@ -21,6 +21,9 @@
 # Initialize variables
 skip_warning="no"
 skip_descriptions="no"
+terminal_logging=0
+terminal_csv_logging=0
+terminal_csv_plist_logging=0
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
@@ -65,8 +68,6 @@ export BRIGHT_RED='tput setaf 9'
 export BRIGHT_GREEN='tput setaf 10'
 export BRIGHT_BLUE='tput setaf 39'
 
-# 256 Colors
-export COLOR256='tput setaf 82'
 
 # Functions to print text with various colors and attributes
 print_red() {
@@ -103,41 +104,9 @@ print_green() {
     printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
 }
 
-print_green_italic() {
-    eval "$GREEN"
-    eval "$ITALIC"
-    printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
-}
-
 print_green_bold() {
     eval "$GREEN"
     eval "$BOLD"
-    printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
-}
-
-print_blue() {
-    eval "$BLUE"
-    printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
-}
-
-print_yellow() {
-    eval "$YELLOW"
-    printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
-}
-
-print_magenta_bold() {
-    eval "$MAGENTA"
-    eval "$BOLD"
-    printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
-}
-
-print_magenta() {
-    eval "$MAGENTA"
-    printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
-}
-
-print_cyan() {
-    eval "$CYAN"
     printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
 }
 
@@ -191,27 +160,65 @@ print_bright_blue_bold() {
     printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
 }
 
-print_color256() {
-    eval "$COLOR256"
-    printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
-}
-
-# Rainbow color function
-print_rainbow() {
-    local text="$1"
-    local i=0
-    local colors=("$RED" "$YELLOW" "$GREEN" "$CYAN" "$WHITE" "$MAGENTA")
-
-    for ((i=0; i<${#text}; i++)); do
-        eval "${colors[$((i % 6))]}"
-        printf "%s" "${text:$i:1}"
-    done
-    printf "\n"
-    eval "$RESET_FORMAT"
-}
 
 # Clear the screen
 clear
+
+write_to_plist() {
+    local check_name=$1
+    local simple_name=$2
+    local boolean_result=$3
+
+    echo '<?xml version="1.0" encoding="UTF-8"?>' >"$PLIST_LOG_FILE"
+    echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >>"$PLIST_LOG_FILE"
+    echo '<plist version="1.0">' >>"$PLIST_LOG_FILE"
+    echo '<dict>' >>"$PLIST_LOG_FILE"
+    echo '</dict>' >>"$PLIST_LOG_FILE"
+    echo '</plist>' >>"$PLIST_LOG_FILE"
+
+    # Create a temporary plist file for processing
+    local temp_plist="/var/log/STIG_Checks_temp.plist"
+
+    # Extract the existing plist content
+    /usr/libexec/PlistBuddy -x -c "Print" "$PLIST_LOG_FILE" >"$temp_plist"
+
+    # Update the plist with the new check result
+    /usr/libexec/PlistBuddy -c "Add :$check_name\_$simple_name dict" "$temp_plist"
+    /usr/libexec/PlistBuddy -c "Add :$check_name\_$simple_name:finding bool $boolean_result" "$temp_plist"
+
+    # Replace the original plist file with the updated one
+    mv "$temp_plist" "$PLIST_LOG_FILE"
+}
+
+write_to_csv() {
+    local check_name="$1"
+    local result="$2"
+    local simple_name="$3"
+    local requires_mdm="$4"
+
+    # Define the header
+    HEADER="Check Name,Simple Name,Result,Requires MDM"
+
+    # Check if the file exists and if it contains the header
+    if [ ! -f "$CSV_LOG_FILE" ]; then
+        # File does not exist; write the header
+        echo "$HEADER" > "$CSV_LOG_FILE"
+    elif ! grep -q "^$HEADER$" "$CSV_LOG_FILE"; then
+        # File exists but does not contain the header; add the header
+        echo "$HEADER" >> "$CSV_LOG_FILE"
+    fi
+
+    # Preserve newlines and special characters by quoting the fields
+    local pass_fail
+    if [ "$command_output" = "$expected_result" ]; then
+        pass_fail="Passed"
+    else
+        pass_fail="Failed"
+    fi
+
+    # Append the data row to the CSV file
+    echo "$check_name,$simple_name,$result,$requires_mdm" >> "$CSV_LOG_FILE"
+}
 
 intro_logo() {
     # ASCII Logo with SecuraMac
@@ -259,19 +266,22 @@ log_settings() {
     clear
     intro_logo
     print_green_bold "#############################################"
-    print_green_bold "# Select an Option:"
+    print_green_bold "# Please Select an Option:"
     print_green_bold "#############################################"
     print_green ""
-    print_green_bold "1. Log in terminal only"
-    print_green_orange_italic_menu "Show results in terminal only"
-    print_green_bold "2. Log in terminal and CSV"
-    print_green_orange_italic_menu "Show results in terminal and produces CSV file"
-    print_green_bold "3. log in terminal, CSV, and Plist"
-    print_green_orange_italic_menu "Show results in terminal and produces CSV/plist file"
-    print_green_bold "4. Return to SecuraMac main menu"
+
+    print_green_bold "1. Display results in the terminal only"
+    print_green_orange_italic_menu "Shows system results directly in the terminal"
+
+    print_green_bold "2. Display results in the terminal and export to CSV"
+    print_green_orange_italic_menu "Shows system results and saves them to a CSV file"
+
+    print_green_bold "3. Display results in the terminal, export to CSV, and Plist"
+    print_green_orange_italic_menu "Shows system results and saves them to both CSV and plist files"
+
+    print_green_bold "4. Return to the SecuraMac main menu"
     print_green_bold "5. Exit SecuraMac"
     print_green ""
-
 
     while true; do
         # Print prompt in yellow and read input on the same line
@@ -282,23 +292,37 @@ log_settings() {
         1)
             print_green "You selected terminal logging only...."
             print_green ""
+            terminal_logging=1
+            firewall_rules
+            Logging_rules
+            sys_util_rules
+            return_to_main_menu
             break
             # Insert code to perform Task 1
             ;;
         2)
-            print_green "You selected Perform Log SecuraMac"
+            print_green "You selected terminal logging and CSV...."
             print_green ""
+            terminal_csv_logging=1
+            firewall_rules
+            Logging_rules
+            sys_util_rules
+            return_to_main_menu
             break
-            log_mode="enable"
             ;;
         3)
-            print_green "You selected Perform Disable SecuraMac"
+            print_green "You selected terminal logging, CSV, and plist...."
             print_green ""
+            terminal_csv_plist_logging=1
+            firewall_rules
+            Logging_rules
+            sys_util_rules
+            return_to_main_menu
             break
             # Insert code to perform Task 3
             ;;
         4)
-            print_green "You selected Full Secura System Report"
+            print_green "Returning to main menu..."
             print_green ""
             clear
             script_main_menu
@@ -373,7 +397,7 @@ return_to_main_menu() {
     print_bright_blue_bold "# COMPLETE! Select an Option below:"
     print_bright_blue_bold "#############################################"
     print_green ""
-    print_green_bold "1. Return to main SecuraMac menu"
+    print_green_bold "1. Return to SecuraMac main menu"
     print_green_bold "2. Exit SecuraMac"
     print_green ""
 
@@ -421,62 +445,69 @@ script_main_menu() {
     print_green_bold "# Select an Option:"
     print_green_bold "#############################################"
     print_green ""
-    print_green_bold "1. Full SecuraMac Setup"
+    print_green_bold "1. SecuraMac Enable Rules"
     print_green_orange_italic_menu "Guides users to enable all security options."
-    print_green_bold "2. Log SecuraMac Setup"
-    print_green_orange_italic_menu "Guides users through logging-only security options."
-    print_green_bold "3. Disable SecuraMac"
+    print_green_bold "2. SecuraMac Disable Rules"
     print_green_orange_italic_menu "Guides users to disable all security options."
-    print_green_bold "4. Full SecuraMac System Report"
+    print_green_bold "3. SecuraMac Full System Report"
     print_green_orange_italic_menu "Provides a detailed report of current system security."
-    print_green_bold "5. Guide to Enable Terminal FDA"
-    print_green_orange_italic_menu "Not required, but limits some settings options."
-    print_green_bold "6. Exit"
+    print_green_bold "4. SecuraMac Guide to Enable Terminal FDA"
+    print_green_orange_italic_menu "FDA Not required, but limits some setting options."
+    print_green_bold "5. Exit"
     print_green ""
 
 
     while true; do
         # Print prompt in yellow and read input on the same line
-        printf "%b%bEnter your choice [1-6]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+        printf "%b%bEnter your choice [1-5]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
 
         # Handle user input
         case "$choice" in
         1)
             print_green "You selected Perform Full SecuraMac..."
             print_green ""
+            disable_execute=0
+            terminal_logging=0
+            terminal_csv_logging=0
+            terminal_csv_plist_logging=0
             firewall_rules
             Logging_rules
+            sys_util_rules
             return_to_main_menu
             break
             # Insert code to perform Task 1
             ;;
         2)
-            print_green "You selected Perform Log SecuraMac..."
-            print_green ""
-            Logging_rules
-            return_to_main_menu
-            break
-            ;;
-        3)
             print_green "You selected Perform Disable SecuraMac..."
             print_green ""
+            disable_execute=1
+            terminal_logging=0
+            terminal_csv_logging=0
+            terminal_csv_plist_logging=0
+            firewall_rules
+            Logging_rules
+            sys_util_rules
+            return_to_main_menu
             break
             # Insert code to perform Task 3
             ;;
-        4)
+        3)
             print_green "You selected Full Secura System Report..."
             print_green ""
+            terminal_logging=0
+            terminal_csv_logging=0
+            terminal_csv_plist_logging=0
             log_settings
             break
             # Insert code to perform Task 4
             ;;
-        5)
+        4)
             print_green "You selected FDA Guide..."
             sleep 1
             terminal_fda_guide
             break
             ;;
-        6)
+        5)
             print_green "You selected exit SecuraMac..."
             sleep 1
             clear
@@ -522,11 +553,20 @@ execute_and_log() {
         status_color_code=$(status_color "$current_status")
     fi
 
+    # Check if disable_execute=1 and rule_disable is empty; if true, exit the function
+    if [[ "$disable_execute" -eq 1 && -z "$rule_disable" ]]; then
+        return
+    fi
+
     # Print statements with formatting using printf
     printf "%b%b-> Rule: %b%s%b\n" "$(eval "$BOLD")$(eval "$GREEN")" "$(eval "$BRIGHT_BLUE")" "$rule_name" "$(eval "$RESET_FORMAT")"
 
     # Print Current Status in parentheses with bold and color
     printf "%bCurrent Status: %b(%b%b%s%b%b\n" "$(eval "$GREEN")" "$(eval "$WHITE")$(eval "$BOLD")" "$status_color_code" "$current_status" "$(eval "$WHITE")$(eval "$BOLD")" ")" "$(eval "$RESET_FORMAT")"
+
+    if [ "$terminal_logging" -eq 1 ]; then
+        return
+    fi
 
     if [[ "$skip_descriptions" == "no" ]]; then
         print_green_orange_italic_rule "$rule_description"
@@ -541,14 +581,37 @@ execute_and_log() {
     local max_attempts=3
 
     while [[ $attempt -le $max_attempts ]]; do
-        printf "%b%bPress Z for Main Menu. $rule_recommend [Yes/No]: %b" "$(eval "$BRIGHT_BLUE")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read user_input
+
+        if [ "$disable_execute" -eq 0 ]; then
+                if [ "$auto_enable" -eq 1 ]; then
+                        print_orange_bold ""
+                        print_orange_bold "Enabling the rule..."
+                        print_orange_bold ""n
+                        echo "FAKE ENABLING"
+                        # eval "$rule_enable"
+                        return
+                else
+                    printf "%b%bPress Z for Main Menu. Do you want to enable this rule? [Yes/No]: %b" "$(eval "$BRIGHT_BLUE")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read user_input
+                fi
+        else
+            printf "%b%bPress Z for Main Menu. Do you want to disable this rule? [Yes/No]: %b" "$(eval "$BRIGHT_BLUE")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read user_input
+        fi
 
         case "$user_input" in
             1|y|Y|yes|YES)
-                print_orange_bold ""
-                print_orange_bold "Enabling the rule..."
-                print_orange_bold ""
-                # eval "$rule_enable"
+                    if [ "$disable_execute" -eq 0 ]; then
+                        print_orange_bold ""
+                        print_orange_bold "Enabling the rule..."
+                        print_orange_bold ""
+                        echo "FAKE ENABLING"
+                        # eval "$rule_enable"
+                    else
+                        print_orange_bold ""
+                        print_orange_bold "Disabling this rule..."
+                        print_orange_bold ""
+                        echo "FAKE DISABLING"
+                        # eval "$rule_disable"
+                    fi
                 return
                 ;;
             2|n|N|no|NO)
@@ -585,11 +648,72 @@ execute_and_log() {
 
 firewall_rules() {
 
-    print_bright_blue_bold "#################"
-    print_bright_blue_bold "# FIREWALL RULES "
-    print_bright_blue_bold "#################"
+    print_bright_blue_bold "# # # # # # # # # # #"
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# FIREWALL RULES     "
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# # # # # # # # # # #"
     print_bright_blue_bold ""
-    # Firewall Rules
+
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    # test
+    else
+        while true; do
+            printf "%b%bWould you like to proceed with configuring firewall rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding..."
+                    print_green ""
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Skipping firewall rules..."
+                    print_green ""
+                    sleep 1
+                    return
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
+            esac
+        done
+
+        if [ "$disable_execute" -eq 0 ]; then
+            while true; do
+            printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
+            printf "%b%bWould you like to auto enable all firewall rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding with auto enabling all..."
+                    print_green ""
+                    auto_enable=1
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Manually enabling firewall rules..."
+                    print_green ""
+                    auto_enable=0
+                    sleep 1
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
+                esac
+            done
+        else
+            auto_enable=0
+        fi
+    fi
     ##############################################
     Rule_Name="Firewall"
     Rule_Recommend="Do you want to enable this rule?"
@@ -614,13 +738,69 @@ firewall_rules() {
 }
 
 Logging_rules() {
-    print_bright_blue_bold "#################"
-    print_bright_blue_bold "# LOGGING RULES  "
-    print_bright_blue_bold "#################"
+    print_bright_blue_bold "# # # # # # # # # # #"
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# SYS LOGGING RULES  "
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# # # # # # # # # # #"
     print_bright_blue_bold ""
 
+    while true; do
+        printf "%b%bWould you like to proceed with configuring system logging rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
 
-    # Logging Rules
+        # Process user input
+        case "$choice" in
+            1|y|Y|yes|YES)
+                print_green "Proceeding..."
+                print_green ""
+                sleep 1
+                # Place the code to execute if the user chooses Yes here
+                break
+                ;;
+            2|n|N|no|NO)
+                print_green "Skipping system logging rules..."
+                print_green ""
+                sleep 1
+                return
+                break
+                ;;
+            *)
+                print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                ;;
+        esac
+    done
+
+    if [ "$disable_execute" -eq 0 ]; then
+        while true; do
+        printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
+        printf "%b%bWould you like to auto enable all logging rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+        # Process user input
+        case "$choice" in
+            1|y|Y|yes|YES)
+                print_green "Proceeding with auto enabling all..."
+                print_green ""
+                auto_enable=1
+                sleep 1
+                # Place the code to execute if the user chooses Yes here
+                break
+                ;;
+            2|n|N|no|NO)
+                print_green "Manually enabling logging rules..."
+                print_green ""
+                auto_enable=0
+                sleep 1
+                break
+                ;;
+            *)
+                print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                ;;
+            esac
+        done
+    else
+        auto_enable=0
+    fi
+
     ##############################################
     Rule_Name="Audit Log Files To Not Contain Access Control List"
     Rule_Recommend="Do you want to enable this rule?"
@@ -933,25 +1113,184 @@ Logging_rules() {
 
     execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
     ###########################################
+}
 
-    # SSH Rules
-    ###########################################
-    Rule_Name="Disable Root Login for SSH"
-    Rule_Recommend="Do you want to disable or enable this rule?"
-    Rule_Description="This rule ensures that SSH does not allow root login by checking the SSH configuration and updating it if necessary."
-    Rule_Check="/usr/sbin/sshd -G | /usr/bin/awk '/permitrootlogin/{print \$2}'"
-    Rule_Result="no"
-    Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; /usr/bin/grep -qxF 'permitrootlogin no' \"\${include_dir}01-mscp-sshd.conf\" 2>/dev/null || echo \"permitrootlogin no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
-    Rule_Disable=""
-    ###########################################
+sys_util_rules() {
 
-    Rule_Name="Disable Password Authentication For SSH"
-    Rule_Recommend="Do you want to disable or enable this rule?"
-    Rule_Description="This rule ensures that SSH does not allow password-based authentication by checking the SSH configuration and updating it if necessary."
-    Rule_Check="/usr/sbin/sshd -G | /usr/bin/grep -Ec '^(passwordauthentication\s+no|kbdinteractiveauthentication\s+no)'"
-    Rule_Result="2"
-    Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; echo \"passwordauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; echo \"kbdinteractiveauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
-    Rule_Disable=""
+    print_bright_blue_bold "# # # # # # # # # # #"
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# SYSTEM UTIL RULES  "
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# # # # # # # # # # #"
+    print_bright_blue_bold ""
+
+        while true; do
+        printf "%b%bWould you like to proceed with configuring system utility rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+        # Process user input
+        case "$choice" in
+            1|y|Y|yes|YES)
+                print_green "Proceeding..."
+                print_green ""
+                sleep 1
+                # Place the code to execute if the user chooses Yes here
+                break
+                ;;
+            2|n|N|no|NO)
+                print_green "Skipping system utility rules..."
+                print_green ""
+                sleep 1
+                return
+                break
+                ;;
+            *)
+                print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                ;;
+        esac
+    done
+
+        if [ "$disable_execute" -eq 0 ]; then
+        while true; do
+        printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
+        printf "%b%bWould you like to auto enable all system utility rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+        # Process user input
+        case "$choice" in
+            1|y|Y|yes|YES)
+                print_green "Proceeding with auto enabling all..."
+                print_green ""
+                auto_enable=1
+                sleep 1
+                # Place the code to execute if the user chooses Yes here
+                break
+                ;;
+            2|n|N|no|NO)
+                print_green "Manually enabling system utility rules..."
+                print_green ""
+                auto_enable=0
+                sleep 1
+                break
+                ;;
+            *)
+                print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                ;;
+            esac
+        done
+    else
+        auto_enable=0
+    fi
+
+    ######################################
+    Rule_Name="Disable Server Message Block Sharing"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling the SMB sharing service helps secure your system by preventing unauthorized access to shared files over the network."
+    Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.smbd\" => disabled'"
+    Rule_Result="1"
+    Rule_Enable="/bin/launchctl disable system/com.apple.smbd"
+    Rule_Disable="/bin/launchctl enable system/com.apple.smbd"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Network File System Service"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling NFS prevents unauthorized file access and sharing over the network, improving system security."
+    Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.nfsd\" => disabled'"
+    Rule_Result="1"
+    Rule_Enable="/bin/launchctl disable system/com.apple.nfsd"
+    Rule_Disable="/bin/launchctl enable system/com.apple.nfsd"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Location Services"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling Location Services protects user privacy by preventing apps from accessing location data."
+    Rule_Check="/usr/bin/sudo -u _locationd /usr/bin/osascript -l JavaScript -e \"$.NSUserDefaults.alloc.initWithSuiteName('com.apple.locationd').objectForKey('LocationServicesEnabled').js\""
+    Rule_Result="false"
+    Rule_Enable="/usr/bin/defaults write /var/db/locationd/Library/Preferences/ByHost/com.apple.locationd LocationServicesEnabled -bool false; /bin/launchctl kickstart -k system/com.apple.locationd"
+    Rule_Disable="/usr/bin/defaults write /var/db/locationd/Library/Preferences/ByHost/com.apple.locationd LocationServicesEnabled -bool true; /bin/launchctl kickstart -k system/com.apple.locationd"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Unix to Unix Copy Protocol Service"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling UUCP prevents potential exploitation of outdated communication protocols, securing the system."
+    Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.uucp\" => disabled'"
+    Rule_Result="1"
+    Rule_Enable="/bin/launchctl disable system/com.apple.uucp"
+    Rule_Disable="/bin/launchctl enable system/com.apple.uucp"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Built-In Web Server"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling the built-in web server (Apache) secures your system by preventing unauthorized web service access."
+    Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"org.apache.httpd\" => disabled'"
+    Rule_Result="1"
+    Rule_Enable="/bin/launchctl disable system/org.apache.httpd"
+    Rule_Disable="/bin/launchctl enable system/org.apache.httpd"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Remote Apple Events"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling Remote Apple Events prevents remote control of your system, increasing overall security."
+    Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.AEServer\" => disabled'"
+    Rule_Result="1"
+    Rule_Enable="/usr/sbin/systemsetup -setremoteappleevents off && /bin/launchctl disable system/com.apple.AEServer"
+    Rule_Disable="/usr/sbin/systemsetup -setremoteappleevents on && /bin/launchctl enable system/com.apple.AEServer"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Trivial File Transfer Protocol Service"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling TFTP protects your system from unauthorized file transfers, enhancing security."
+    Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.tftpd\" => disabled'"
+    Rule_Result="1"
+    Rule_Enable="/bin/launchctl disable system/com.apple.tftpd"
+    Rule_Disable="/bin/launchctl enable system/com.apple.tftpd"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Bluetooth Sharing"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling Bluetooth Sharing ensures that files are not shared over Bluetooth, protecting sensitive data."
+    CURRENT_USER=$( /usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | /usr/bin/awk '/Name :/ && ! /loginwindow/ { print $3 }' ) ## Required for Command
+    Rule_Check="/usr/bin/sudo -u \"\$CURRENT_USER\" /usr/bin/defaults -currentHost read com.apple.Bluetooth PrefKeyServicesEnabled"
+    Rule_Result="0"
+    Rule_Enable="/usr/bin/sudo -u \"\$CURRENT_USER\" /usr/bin/defaults -currentHost write com.apple.Bluetooth PrefKeyServicesEnabled -bool false"
+    Rule_Disable="/usr/bin/sudo -u \"\$CURRENT_USER\" /usr/bin/defaults -currentHost write com.apple.Bluetooth PrefKeyServicesEnabled -bool true"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable CD/DVD Sharing"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling CD/DVD Sharing prevents unauthorized access to media drives, securing your system."
+    Rule_Check="/usr/bin/pgrep -q ODSAgent; /bin/echo \$?"
+    Rule_Result="1"
+    Rule_Enable="/bin/launchctl unload /System/Library/LaunchDaemons/com.apple.ODSAgent.plist"
+    Rule_Disable="/bin/launchctl load /System/Library/LaunchDaemons/com.apple.ODSAgent.plist"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Printer Sharing"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling Printer Sharing ensures that printers are not accessible over the network, protecting sensitive data."
+    Rule_Check="/usr/sbin/cupsctl | /usr/bin/grep -c \"_share_printers=0\""
+    Rule_Result="1"
+    Rule_Enable="/usr/sbin/cupsctl --no-share-printers && /usr/bin/lpstat -p | awk '{print \$2}'| /usr/bin/xargs -I{} lpadmin -p {} -o printer-is-shared=false"
+    Rule_Disable="/usr/sbin/cupsctl --share-printers && /usr/bin/lpstat -p | awk '{print \$2}'| /usr/bin/xargs -I{} lpadmin -p {} -o printer-is-shared=true"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ###########################################
+    Rule_Name="Disable Remote Management"
+    Rule_Recommend="Do you want to enable this rule?"
+    Rule_Description="Disabling Remote Management prevents unauthorized control of your system, enhancing security."
+    Rule_Check="/usr/libexec/mdmclient QuerySecurityInfo | /usr/bin/grep -c \"RemoteDesktopEnabled = 0\""
+    Rule_Result="1"
+    Rule_Enable="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -deactivate -stop"
+    Rule_Disable="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
     ###########################################
 }
 
@@ -962,114 +1301,6 @@ prescript_warning
 script_main_menu
 
 exit 0
-
-print_bright_blue_bold "#################"
-print_bright_blue_bold "# RANDOM RULES  "
-print_bright_blue_bold "#################"
-print_bright_blue_bold ""
-
-# Disable Random Services
-######################################
-Rule_Name="Disable Server Message Block Sharing"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if the Server Message Block (SMB) sharing service is disabled and provides a command to disable it if necessary."
-Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.smbd\" => disabled'"
-Rule_Result="1"
-Rule_Enable="/bin/launchctl disable system/com.apple.smbd"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable Network File System Service"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if the Network File System (NFS) service is disabled and provides a command to disable it if necessary."
-Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.nfsd\" => disabled'"
-Rule_Result="1"
-Rule_Enable="/bin/launchctl disable system/com.apple.nfsd"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable Location Services"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if Location Services are disabled and provides a command to disable them if necessary."
-Rule_Check="/usr/bin/sudo -u _locationd /usr/bin/osascript -l JavaScript -e \"$.NSUserDefaults.alloc.initWithSuiteName('com.apple.locationd').objectForKey('LocationServicesEnabled').js\""
-Rule_Result="false"
-Rule_Enable="/usr/bin/defaults write /var/db/locationd/Library/Preferences/ByHost/com.apple.locationd LocationServicesEnabled -bool false; /bin/launchctl kickstart -k system/com.apple.locationd"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable Unix to Unix Copy Protocol Service"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if the Unix to Unix Copy Protocol (UUCP) service is disabled and provides a command to disable it if necessary."
-Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.uucp\" => disabled'"
-Rule_Result="1"
-Rule_Enable="/bin/launchctl disable system/com.apple.uucp"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable Built-In Web Server"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if the built-in web server (Apache) is disabled and provides a command to disable it if necessary."
-Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"org.apache.httpd\" => disabled'"
-Rule_Result="1"
-Rule_Enable="/bin/launchctl disable system/org.apache.httpd"
-Rule_Disable="/bin/launchctl enable system/org.apache.httpd"
-###########################################
-
-Rule_Name="Disable Remote Apple Events"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if Remote Apple Events are disabled and provides a command to disable them if necessary."
-Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.AEServer\" => disabled'"
-Rule_Result="1"
-Rule_Enable="/usr/sbin/systemsetup -setremoteappleevents off && /bin/launchctl disable system/com.apple.AEServer"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable Trivial File Transfer Protocol Service"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if the Trivial File Transfer Protocol (TFTP) service is disabled and provides a command to disable it if necessary."
-Rule_Check="/bin/launchctl print-disabled system | /usr/bin/grep -c '\"com.apple.tftpd\" => disabled'"
-Rule_Result="1"
-Rule_Enable="/bin/launchctl disable system/com.apple.tftpd"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable Bluetooth Sharing"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if Bluetooth Sharing is disabled and provides a command to disable it if necessary."
-CURRENT_USER=$( /usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | /usr/bin/awk '/Name :/ && ! /loginwindow/ { print $3 }' ) ## Required for Command
-Rule_Check="/usr/bin/sudo -u \"$CURRENT_USER\" /usr/bin/defaults -currentHost read com.apple.Bluetooth PrefKeyServicesEnabled"
-Rule_Result="0"
-Rule_Enable="/usr/bin/sudo -u \"\$CURRENT_USER\" /usr/bin/defaults -currentHost write com.apple.Bluetooth PrefKeyServicesEnabled -bool false"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable CD/DVD Sharing"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if CD/DVD Sharing is disabled and provides a command to disable it if necessary."
-Rule_Check="/usr/bin/pgrep -q ODSAgent; /bin/echo \$?"
-Rule_Result="1"
-Rule_Enable="/bin/launchctl unload /System/Library/LaunchDaemons/com.apple.ODSAgent.plist"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable Printer Sharing"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if Printer Sharing is disabled and provides a command to disable it if necessary."
-Rule_Check="/usr/sbin/cupsctl | /usr/bin/grep -c \"_share_printers=0\""
-Rule_Result="1"
-Rule_Enable="/usr/sbin/cupsctl --no-share-printers && /usr/bin/lpstat -p | awk '{print \$2}'| /usr/bin/xargs -I{} lpadmin -p {} -o printer-is-shared=false"
-Rule_Disable=""
-###########################################
-
-Rule_Name="Disable Remote Management"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule checks if Remote Management is disabled and provides a command to disable it if necessary."
-Rule_Check="/usr/libexec/mdmclient QuerySecurityInfo | /usr/bin/grep -c \"RemoteDesktopEnabled = 0\""
-Rule_Result="1"
-Rule_Enable="/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -deactivate -stop"
-Rule_Disable=""
-###########################################
-
 
 
 # Extra Measures
@@ -1120,7 +1351,6 @@ expected_result="0"
 fix_command="for u in \$(/usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '\$2 > 500 {print \$1}'); do
   /usr/bin/dscl . -delete /Users/\$u hint
 done"
-requires_mdm="false"
 
 check_name="V-259555"
 simple_name="System_Must_Reauthenticate_For_Priviledge_Escalations_When_Using_Sudo_Command"
@@ -1128,7 +1358,6 @@ command="/usr/bin/sudo /usr/bin/sudo -V | /usr/bin/grep -c \"Authentication time
 expected_result="1"
 fix_command="/usr/bin/find /etc/sudoers* -type f -exec sed -i '' '/timestamp_timeout/d' '{}' \;
 /bin/echo \"Defaults timestamp_timeout=0\" >> /etc/sudoers.d/mscp"
-requires_mdm="false"
 
 
 
@@ -1141,6 +1370,27 @@ Rule_Description="If no, remote login will be turned off"
 Rule_Check='sudo systemsetup -getremotelogin | grep -q "on" && echo "true" || echo "false"'
 Rule_Enable="sudo systemsetup -f -setremotelogin on"
 Rule_Disable="sudo systemsetup -f -setremotelogin off"
+
+
+    # SSH Rules
+    ###########################################
+    Rule_Name="Disable Root Login for SSH"
+    Rule_Recommend="Do you want to disable or enable this rule?"
+    Rule_Description="This rule ensures that SSH does not allow root login by checking the SSH configuration and updating it if necessary."
+    Rule_Check="/usr/sbin/sshd -G | /usr/bin/awk '/permitrootlogin/{print \$2}'"
+    Rule_Result="no"
+    Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; /usr/bin/grep -qxF 'permitrootlogin no' \"\${include_dir}01-mscp-sshd.conf\" 2>/dev/null || echo \"permitrootlogin no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
+    Rule_Disable=""
+    ###########################################
+
+    Rule_Name="Disable Password Authentication For SSH"
+    Rule_Recommend="Do you want to disable or enable this rule?"
+    Rule_Description="This rule ensures that SSH does not allow password-based authentication by checking the SSH configuration and updating it if necessary."
+    Rule_Check="/usr/sbin/sshd -G | /usr/bin/grep -Ec '^(passwordauthentication\s+no|kbdinteractiveauthentication\s+no)'"
+    Rule_Result="2"
+    Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; echo \"passwordauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; echo \"kbdinteractiveauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
+    Rule_Disable=""
+    ###########################################
 
 
 # Checks Only
