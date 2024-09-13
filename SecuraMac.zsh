@@ -293,6 +293,7 @@ log_settings() {
             print_green "You selected terminal logging only...."
             print_green ""
             terminal_logging=1
+            sys_update_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -304,6 +305,7 @@ log_settings() {
             print_green "You selected terminal logging and CSV...."
             print_green ""
             terminal_csv_logging=1
+            sys_update_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -314,6 +316,7 @@ log_settings() {
             print_green "You selected terminal logging, CSV, and plist...."
             print_green ""
             terminal_csv_plist_logging=1
+            sys_update_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -470,6 +473,7 @@ script_main_menu() {
             terminal_logging=0
             terminal_csv_logging=0
             terminal_csv_plist_logging=0
+            sys_update_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -484,6 +488,7 @@ script_main_menu() {
             terminal_logging=0
             terminal_csv_logging=0
             terminal_csv_plist_logging=0
+            sys_update_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -735,6 +740,10 @@ firewall_rules() {
 
     execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
     ##############################################
+
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+        print_green ""
+    fi
 }
 
 Logging_rules() {
@@ -745,60 +754,64 @@ Logging_rules() {
     print_bright_blue_bold "# # # # # # # # # # #"
     print_bright_blue_bold ""
 
-    while true; do
-        printf "%b%bWould you like to proceed with configuring system logging rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
-
-        # Process user input
-        case "$choice" in
-            1|y|Y|yes|YES)
-                print_green "Proceeding..."
-                print_green ""
-                sleep 1
-                # Place the code to execute if the user chooses Yes here
-                break
-                ;;
-            2|n|N|no|NO)
-                print_green "Skipping system logging rules..."
-                print_green ""
-                sleep 1
-                return
-                break
-                ;;
-            *)
-                print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
-                ;;
-        esac
-    done
-
-    if [ "$disable_execute" -eq 0 ]; then
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    # Place Holder
+    else
         while true; do
-        printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
-        printf "%b%bWould you like to auto enable all logging rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+            printf "%b%bWould you like to proceed with configuring system logging rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
 
-        # Process user input
-        case "$choice" in
-            1|y|Y|yes|YES)
-                print_green "Proceeding with auto enabling all..."
-                print_green ""
-                auto_enable=1
-                sleep 1
-                # Place the code to execute if the user chooses Yes here
-                break
-                ;;
-            2|n|N|no|NO)
-                print_green "Manually enabling logging rules..."
-                print_green ""
-                auto_enable=0
-                sleep 1
-                break
-                ;;
-            *)
-                print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
-                ;;
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding..."
+                    print_green ""
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Skipping system logging rules..."
+                    print_green ""
+                    sleep 1
+                    return
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
             esac
         done
-    else
-        auto_enable=0
+
+        if [ "$disable_execute" -eq 0 ]; then
+            while true; do
+            printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
+            printf "%b%bWould you like to auto enable all logging rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding with auto enabling all..."
+                    print_green ""
+                    auto_enable=1
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Manually enabling logging rules..."
+                    print_green ""
+                    auto_enable=0
+                    sleep 1
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
+                esac
+            done
+        else
+            auto_enable=0
+        fi
     fi
 
     ##############################################
@@ -1113,6 +1126,10 @@ Logging_rules() {
 
     execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
     ###########################################
+
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+        print_green ""
+    fi
 }
 
 sys_util_rules() {
@@ -1123,63 +1140,86 @@ sys_util_rules() {
     print_bright_blue_bold "#                    "
     print_bright_blue_bold "# # # # # # # # # # #"
     print_bright_blue_bold ""
-
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    # Place Holder
+    else
         while true; do
         printf "%b%bWould you like to proceed with configuring system utility rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
 
-        # Process user input
-        case "$choice" in
-            1|y|Y|yes|YES)
-                print_green "Proceeding..."
-                print_green ""
-                sleep 1
-                # Place the code to execute if the user chooses Yes here
-                break
-                ;;
-            2|n|N|no|NO)
-                print_green "Skipping system utility rules..."
-                print_green ""
-                sleep 1
-                return
-                break
-                ;;
-            *)
-                print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
-                ;;
-        esac
-    done
-
-        if [ "$disable_execute" -eq 0 ]; then
-        while true; do
-        printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
-        printf "%b%bWould you like to auto enable all system utility rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
-
-        # Process user input
-        case "$choice" in
-            1|y|Y|yes|YES)
-                print_green "Proceeding with auto enabling all..."
-                print_green ""
-                auto_enable=1
-                sleep 1
-                # Place the code to execute if the user chooses Yes here
-                break
-                ;;
-            2|n|N|no|NO)
-                print_green "Manually enabling system utility rules..."
-                print_green ""
-                auto_enable=0
-                sleep 1
-                break
-                ;;
-            *)
-                print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
-                ;;
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding..."
+                    print_green ""
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Skipping system utility rules..."
+                    print_green ""
+                    sleep 1
+                    return
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
             esac
         done
-    else
-        auto_enable=0
+
+            if [ "$disable_execute" -eq 0 ]; then
+            while true; do
+            printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
+            printf "%b%bWould you like to auto enable all system utility rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding with auto enabling all..."
+                    print_green ""
+                    auto_enable=1
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Manually enabling system utility rules..."
+                    print_green ""
+                    auto_enable=0
+                    sleep 1
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
+                esac
+            done
+        else
+            auto_enable=0
+        fi
     fi
 
+    ######################################
+    Rule_Name="Disable Spotlight Indexing"
+    Rule_Recommend="Do you want to disable Spotlight indexing?"
+    Rule_Description="Disabling Spotlight indexing prevents macOS from scanning and cataloging files, which enhances privacy by reducing system metadata exposure."
+    Rule_Check="mdutil -s /"
+    Rule_Result="0"
+    Rule_Enable="sudo mdutil -a -i off"
+    Rule_Disable="sudo mdutil -a -i on"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ######################################
+    Rule_Name="Disable Metadata Write on External Drives"
+    Rule_Recommend="Do you want to disable metadata writing on external drives?"
+    Rule_Description="Disabling metadata writing prevents macOS from writing metadata (e.g., file history) on external drives, protecting sensitive information."
+    Rule_Check="sudo defaults read /Library/Preferences/com.apple.Spotlight.plist"
+    Rule_Result="1"
+    Rule_Enable="sudo defaults write /Library/Preferences/com.apple.Spotlight.plist ExternalVolumesExclude -bool true"
+    Rule_Disable="sudo defaults write /Library/Preferences/com.apple.Spotlight.plist ExternalVolumesExclude -bool false"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
     ######################################
     Rule_Name="Disable Server Message Block Sharing"
     Rule_Recommend="Do you want to enable this rule?"
@@ -1292,6 +1332,137 @@ sys_util_rules() {
 
     execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
     ###########################################
+
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+        print_green ""
+    fi
+}
+
+sys_update_rules() {
+
+    print_bright_blue_bold "# # # # # # # # # # #"
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# SYSTEM UPDATE RULES"
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# # # # # # # # # # #"
+    print_bright_blue_bold ""
+
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    # test
+    else
+        while true; do
+            printf "%b%bWould you like to proceed with configuring system update rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding..."
+                    print_green ""
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Skipping system update rules..."
+                    print_green ""
+                    sleep 1
+                    return
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
+            esac
+        done
+
+        if [ "$disable_execute" -eq 0 ]; then
+            while true; do
+            printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
+            printf "%b%bWould you like to auto enable all system update rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding with auto enabling all..."
+                    print_green ""
+                    auto_enable=1
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Manually enabling system update rules..."
+                    print_green ""
+                    auto_enable=0
+                    sleep 1
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
+                esac
+            done
+        else
+            auto_enable=0
+        fi
+    fi
+
+    ############################
+    Rule_Name="Enable Automatic Update Check"
+    Rule_Recommend="Do you want to enable automatic checking for updates?"
+    Rule_Description="Enabling automatic update checks ensures that macOS regularly checks for system and security updates, helping to identify vulnerabilities and keeping your system secure with the latest patches."
+    Rule_Check="defaults read /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled"
+    Rule_Result="1"
+    Rule_Enable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true"
+    Rule_Disable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool false"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ############################
+    Rule_Name="Enable Automatic Update Download"
+    Rule_Recommend="Do you want to enable automatic downloading of updates?"
+    Rule_Description="Allowing macOS to automatically download updates ensures that critical security patches and system updates are ready to install immediately, reducing the window of vulnerability from known security issues."
+    Rule_Check="defaults read /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload"
+    Rule_Result="1"
+    Rule_Enable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool true"
+    Rule_Disable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool false"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ############################
+    Rule_Name="Enable Critical Update Install"
+    Rule_Recommend="Do you want to enable automatic installation of critical updates?"
+    Rule_Description="Automatically installing critical updates protects your system from vulnerabilities by ensuring that security patches and essential fixes are applied as soon as they are available, without requiring user intervention."
+    Rule_Check="defaults read /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall"
+    Rule_Result="1"
+    Rule_Enable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool true"
+    Rule_Disable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool false"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ############################
+    Rule_Name="Enable Configuration Data Install"
+    Rule_Recommend="Do you want to enable automatic installation of configuration data?"
+    Rule_Description="This setting ensures that macOS automatically installs updated configuration data, which may include security policies or new rules for maintaining system integrity, helping to defend against emerging threats."
+    Rule_Check="defaults read /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall"
+    Rule_Result="1"
+    Rule_Enable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool true"
+    Rule_Disable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool false"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ############################
+    Rule_Name="Enable Automatic App Update"
+    Rule_Recommend="Do you want to enable automatic updating of App Store apps?"
+    Rule_Description="Enabling automatic app updates ensures that applications installed from the App Store receive the latest security updates and bug fixes, reducing the risk of exploits and vulnerabilities in third-party software."
+    Rule_Check="defaults read /Library/Preferences/com.apple.commerce AutoUpdate"
+    Rule_Result="1"
+    Rule_Enable="sudo defaults write /Library/Preferences/com.apple.commerce AutoUpdate -bool true"
+    Rule_Disable="sudo defaults write /Library/Preferences/com.apple.commerce AutoUpdate -bool false"
+
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ##############################################
+
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+        print_green ""
+    fi
 }
 
 # Trigger Prescript Warning Variable
@@ -1301,76 +1472,6 @@ prescript_warning
 script_main_menu
 
 exit 0
-
-
-# Update Rules
-############################
-Rule_Name="Enable Automatic Update Check"
-Rule_Recommend="Do you want to enable automatic checking for updates?"
-Rule_Description="Enabling automatic update checks ensures that macOS regularly checks for system and security updates, helping to identify vulnerabilities and keeping your system secure with the latest patches."
-Rule_Check="defaults read /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled"
-Rule_Result="1"
-Rule_Enable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true"
-Rule_Disable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticCheckEnabled -bool false"
-
-############################
-Rule_Name="Enable Automatic Update Download"
-Rule_Recommend="Do you want to enable automatic downloading of updates?"
-Rule_Description="Allowing macOS to automatically download updates ensures that critical security patches and system updates are ready to install immediately, reducing the window of vulnerability from known security issues."
-Rule_Check="defaults read /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload"
-Rule_Result="1"
-Rule_Enable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool true"
-Rule_Disable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate AutomaticDownload -bool false"
-
-############################
-Rule_Name="Enable Critical Update Install"
-Rule_Recommend="Do you want to enable automatic installation of critical updates?"
-Rule_Description="Automatically installing critical updates protects your system from vulnerabilities by ensuring that security patches and essential fixes are applied as soon as they are available, without requiring user intervention."
-Rule_Check="defaults read /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall"
-Rule_Result="1"
-Rule_Enable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool true"
-Rule_Disable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate CriticalUpdateInstall -bool false"
-
-############################
-Rule_Name="Enable Configuration Data Install"
-Rule_Recommend="Do you want to enable automatic installation of configuration data?"
-Rule_Description="This setting ensures that macOS automatically installs updated configuration data, which may include security policies or new rules for maintaining system integrity, helping to defend against emerging threats."
-Rule_Check="defaults read /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall"
-Rule_Result="1"
-Rule_Enable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool true"
-Rule_Disable="sudo defaults write /Library/Preferences/com.apple.SoftwareUpdate ConfigDataInstall -bool false"
-
-############################
-Rule_Name="Enable Automatic App Update"
-Rule_Recommend="Do you want to enable automatic updating of App Store apps?"
-Rule_Description="Enabling automatic app updates ensures that applications installed from the App Store receive the latest security updates and bug fixes, reducing the risk of exploits and vulnerabilities in third-party software."
-Rule_Check="defaults read /Library/Preferences/com.apple.commerce AutoUpdate"
-Rule_Result="1"
-Rule_Enable="sudo defaults write /Library/Preferences/com.apple.commerce AutoUpdate -bool true"
-Rule_Disable="sudo defaults write /Library/Preferences/com.apple.commerce AutoUpdate -bool false"
-
-
-
-# Disable Spotlight Indexing
-Rule_Name="Disable Spotlight Indexing"
-Rule_Recommend="Do you want to disable Spotlight indexing?"
-Rule_Description="Disabling Spotlight indexing prevents macOS from scanning and cataloging files, which enhances privacy by reducing system metadata exposure."
-Rule_Check="mdutil -s /"
-Rule_Result="0"
-Rule_Enable="sudo mdutil -a -i off"
-Rule_Disable="sudo mdutil -a -i on"
-
-# Disable Metadata Write on External Drives
-Rule_Name="Disable Metadata Write on External Drives"
-Rule_Recommend="Do you want to disable metadata writing on external drives?"
-Rule_Description="Disabling metadata writing prevents macOS from writing metadata (e.g., file history) on external drives, protecting sensitive information."
-Rule_Check="sudo defaults read /Library/Preferences/com.apple.Spotlight.plist"
-Rule_Result="1"
-Rule_Enable="sudo defaults write /Library/Preferences/com.apple.Spotlight.plist ExternalVolumesExclude -bool true"
-Rule_Disable="sudo defaults write /Library/Preferences/com.apple.Spotlight.plist ExternalVolumesExclude -bool false"
-
-
-
 
 
 # Extra Measures
