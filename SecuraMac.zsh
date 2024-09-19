@@ -1490,7 +1490,6 @@ unset IFS"
 IFS=$'\n'; for userDirs in $(/usr/bin/find /System/Volumes/Data/Users -mindepth 1 -maxdepth 1 -type d ! \( -perm 700 -o -perm 711 \) | /usr/bin/grep -v "Shared" | /usr/bin/grep -v "Guest"); do /bin/chmod og-rwx "$userDirs"; done; unset IFS
 
 
-requires_mdm="false"
 
 check_name="V-259515"
 simple_name="System_Must_Require_Administrator_Privileges_To_Modify_Systemwide_Settings"
@@ -1520,9 +1519,6 @@ fi
 done"
 
 authDBs=("system.preferences" "system.preferences.energysaver" "system.preferences.network" "system.preferences.printing" "system.preferences.sharing" "system.preferences.softwareupdate" "system.preferences.startupdisk" "system.preferences.timemachine"); for section in "${authDBs[@]}"; do /usr/bin/security -q authorizationdb read "$section" > "/tmp/$section.plist"; key_value=$(/usr/libexec/PlistBuddy -c "Print :shared" "/tmp/$section.plist" 2>&1); if [[ "$key_value" == *"Does Not Exist"* ]]; then /usr/libexec/PlistBuddy -c "Add :shared bool false" "/tmp/$section.plist"; else /usr/libexec/PlistBuddy -c "Set :shared false" "/tmp/$section.plist"; fi; /usr/bin/security -q authorizationdb write "$section" < "/tmp/$section.plist"; done
-
-
-requires_mdm="false"
 
 
 
