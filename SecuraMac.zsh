@@ -1486,6 +1486,10 @@ for userDirs in \$( /usr/bin/find /System/Volumes/Data/Users -mindepth 1 -maxdep
   /bin/chmod og-rwx \"\$userDirs\"
 done
 unset IFS"
+
+IFS=$'\n'; for userDirs in $(/usr/bin/find /System/Volumes/Data/Users -mindepth 1 -maxdepth 1 -type d ! \( -perm 700 -o -perm 711 \) | /usr/bin/grep -v "Shared" | /usr/bin/grep -v "Guest"); do /bin/chmod og-rwx "$userDirs"; done; unset IFS
+
+
 requires_mdm="false"
 
 check_name="V-259515"
@@ -1498,6 +1502,9 @@ for section in \${authDBs[@]}; do
   fi
 done
 echo \$result"
+
+authDBs=("system.preferences" "system.preferences.energysaver" "system.preferences.network" "system.preferences.printing" "system.preferences.sharing" "system.preferences.softwareupdate" "system.preferences.startupdisk" "system.preferences.timemachine"); result="1"; for section in "${authDBs[@]}"; do if [[ $(/usr/bin/security -q authorizationdb read "$section" | /usr/bin/xmllint -xpath 'name(//*[contains(text(), "shared")]/following-sibling::*[1])' -) != "false" ]]; then result="0"; fi; done; echo $result
+
 expected_result="1"
 fix_command="authDBs=(\"system.preferences\" \"system.preferences.energysaver\" \"system.preferences.network\" \"system.preferences.printing\" \"system.preferences.sharing\" \"system.preferences.softwareupdate\" \"system.preferences.startupdisk\" \"system.preferences.timemachine\")
 
@@ -1511,6 +1518,10 @@ else
 fi
   /usr/bin/security -q authorizationdb write \"\$section\" < \"/tmp/\$section.plist\"
 done"
+
+authDBs=("system.preferences" "system.preferences.energysaver" "system.preferences.network" "system.preferences.printing" "system.preferences.sharing" "system.preferences.softwareupdate" "system.preferences.startupdisk" "system.preferences.timemachine"); for section in "${authDBs[@]}"; do /usr/bin/security -q authorizationdb read "$section" > "/tmp/$section.plist"; key_value=$(/usr/libexec/PlistBuddy -c "Print :shared" "/tmp/$section.plist" 2>&1); if [[ "$key_value" == *"Does Not Exist"* ]]; then /usr/libexec/PlistBuddy -c "Add :shared bool false" "/tmp/$section.plist"; else /usr/libexec/PlistBuddy -c "Set :shared false" "/tmp/$section.plist"; fi; /usr/bin/security -q authorizationdb write "$section" < "/tmp/$section.plist"; done
+
+
 requires_mdm="false"
 
 
@@ -1522,6 +1533,10 @@ expected_result="0"
 fix_command="for u in \$(/usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '\$2 > 500 {print \$1}'); do
   /usr/bin/dscl . -delete /Users/\$u hint
 done"
+for u in $(/usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '$2 > 500 {print $1}'); do /usr/bin/dscl . -delete /Users/$u hint; done
+
+
+
 
 check_name="V-259555"
 simple_name="System_Must_Reauthenticate_For_Priviledge_Escalations_When_Using_Sudo_Command"
@@ -1529,6 +1544,9 @@ command="/usr/bin/sudo /usr/bin/sudo -V | /usr/bin/grep -c \"Authentication time
 expected_result="1"
 fix_command="/usr/bin/find /etc/sudoers* -type f -exec sed -i '' '/timestamp_timeout/d' '{}' \;
 /bin/echo \"Defaults timestamp_timeout=0\" >> /etc/sudoers.d/mscp"
+
+/usr/bin/find /etc/sudoers* -type f -exec sed -i '' '/timestamp_timeout/d' '{}' \; && /bin/echo "Defaults timestamp_timeout=0" >> /etc/sudoers.d/mscp
+
 
 
 
