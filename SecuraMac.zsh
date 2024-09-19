@@ -1555,27 +1555,23 @@ Rule_Description="If no, remote login will be turned off"
 Rule_Check='sudo systemsetup -getremotelogin | grep -q "on" && echo "true" || echo "false"'
 Rule_Enable="sudo systemsetup -f -setremotelogin on"
 Rule_Disable="sudo systemsetup -f -setremotelogin off"
-
-
-    # SSH Rules
-    ###########################################
-    Rule_Name="Disable Root Login for SSH"
-    Rule_Recommend="Do you want to disable or enable this rule?"
-    Rule_Description="This rule ensures that SSH does not allow root login by checking the SSH configuration and updating it if necessary."
-    Rule_Check="/usr/sbin/sshd -G | /usr/bin/awk '/permitrootlogin/{print \$2}'"
-    Rule_Result="no"
-    Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; /usr/bin/grep -qxF 'permitrootlogin no' \"\${include_dir}01-mscp-sshd.conf\" 2>/dev/null || echo \"permitrootlogin no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
-    Rule_Disable=""
-    ###########################################
-
-    Rule_Name="Disable Password Authentication For SSH"
-    Rule_Recommend="Do you want to disable or enable this rule?"
-    Rule_Description="This rule ensures that SSH does not allow password-based authentication by checking the SSH configuration and updating it if necessary."
-    Rule_Check="/usr/sbin/sshd -G | /usr/bin/grep -Ec '^(passwordauthentication\s+no|kbdinteractiveauthentication\s+no)'"
-    Rule_Result="2"
-    Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; echo \"passwordauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; echo \"kbdinteractiveauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
-    Rule_Disable=""
-    ###########################################
+###########################################
+Rule_Name="Disable Root Login for SSH"
+Rule_Recommend="Do you want to disable or enable this rule?"
+Rule_Description="This rule ensures that SSH does not allow root login by checking the SSH configuration and updating it if necessary."
+Rule_Check="/usr/sbin/sshd -G | /usr/bin/awk '/permitrootlogin/{print \$2}'"
+Rule_Result="no"
+Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; /usr/bin/grep -qxF 'permitrootlogin no' \"\${include_dir}01-mscp-sshd.conf\" 2>/dev/null || echo \"permitrootlogin no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
+Rule_Disable=""
+###########################################
+Rule_Name="Disable Password Authentication For SSH"
+Rule_Recommend="Do you want to disable or enable this rule?"
+Rule_Description="This rule ensures that SSH does not allow password-based authentication by checking the SSH configuration and updating it if necessary."
+Rule_Check="/usr/sbin/sshd -G | /usr/bin/grep -Ec '^(passwordauthentication\s+no|kbdinteractiveauthentication\s+no)'"
+Rule_Result="2"
+Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; echo \"passwordauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; echo \"kbdinteractiveauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
+Rule_Disable=""
+###########################################
 
 
 # Checks Only
@@ -1611,6 +1607,86 @@ requires_mdm="false"
 check_name="V-259543"
 simple_name="Enable_Firmware_Password_Intel_Chip"
 command="/usr/sbin/firmwarepasswd -check | /usr/bin/grep -c \"Password Enabled: Yes\""
+
+
+
+# User Personal Preference
+
+Rule_Name="Lock Mac as Soon as Screensaver Starts"
+Rule_Recommend="Do you want to disable or enable this rule?"
+Rule_Description="If your screen is black or on screensaver mode, you'll be prompted for a password to login every time."
+Rule_Check="defaults read /Library/Preferences/com.apple.screensaver | grep -q 'askForPassword' && defaults read /Library/Preferences/com.apple.screensaver | grep -q 'askForPasswordDelay''"
+Rule_Result="1"
+Rule_Enable="defaults write /Library/Preferences/com.apple.screensaver askForPassword -int 1 && defaults write /Library/Preferences/com.apple.screensaver askForPasswordDelay -int 0"
+Rule_Disable="rm /Library/Preferences/com.apple.screensaver.plist"
+
+Rule_Name="Display All File Extensions"
+Rule_Recommend="Do you want to disable or enable this rule?"
+Rule_Description="This prevents malware from disguising itself as another file type."
+Rule_Check="defaults read NSGlobalDomain AppleShowAllExtensions"
+Rule_Result="1"
+Rule_Enable="defaults write NSGlobalDomain AppleShowAllExtensions -bool true"
+Rule_Disable="defaults write NSGlobalDomain AppleShowAllExtensions -bool false"
+
+Rule_Name="Display Hidden Files in Finder"
+Rule_Recommend="Do you want to disable or enable this rule?"
+Rule_Description="This lets you see all files on the system without having to use the terminal."
+Rule_Check="defaults read /Library/Preferences/com.apple.finder AppleShowAllFiles"
+Rule_Result="true"
+Rule_Enable="defaults read ~/com.apple.finder AppleShowAllFiles -bool true"
+Rule_Disable="defaults read /Library/Preferences/com.apple.finder AppleShowAllFiles -bool false"
+
+Rule_Name="Disable Saving to the Cloud by Default"
+Rule_Recommend="Do you want to disable or enable this rule?"
+Rule_Description="This prevents sensitive documents from being unintentionally stored on the cloud"
+Rule_Check="defaults read NSGlobalDomain NSDocumentSaveNewDocumentsToCloud"
+Rule_Result="0"
+Rule_Enable="defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false"
+Rule_Disable="defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool true"
+
+
+# Cleaning Data
+
+Rule_Name="Clear Language Modeling Metadata"
+Rule_Description="This includes user spelling, typing and suggestion data."
+Rule_Check="rm -rfv ~/Library/LanguageModeling/* ~/Library/Spelling/* ~/Library/Suggestions/*"
+
+Rule_Name="Disable language modeling data collection"
+Rule_Description="This includes user spelling, typing and suggestion data."
+Rule_Check="sudo chmod -R 000 ~/Library/LanguageModeling ~/Library/Spelling ~/Library/Suggestions && sudo chflags -R uchg ~/Library/LanguageModeling ~/Library/Spelling ~/Library/Suggestions"
+
+Rule_Name="Clear QuickLook Metadata"
+Rule_Description="This will erase spotlight user data."
+Rule_Check="rm -rfv ~/Library/Application\ Support/Quick\ Look/*"
+
+Rule_Name="Clear Downloads Metadata"
+Rule_Description="This will erase downloads user data."
+Rule_Check="rm -rfv ~/Library/Application\ Support/Quick\ Look/*"
+
+Rule_Name="Clear User Cache"
+Rule_Description="This will clear user-specific application cache data."
+Rule_Check="rm -rfv ~/Library/Caches/*"
+
+Rule_Name="Clear System Cache"
+Rule_Description="This will clear system-wide application cache data."
+Rule_Check="sudo rm -rfv /Library/Caches/*"
+
+Rule_Name="Clear Application Support Cache"
+Rule_Description="This will clear application-specific cache data."
+Rule_Check="rm -rfv ~/Library/Application\ Support/*"
+
+Rule_Name="Clear Font Cache"
+Rule_Description="This will clear font cache data."
+Rule_Check="rm -rfv ~/Library/Fonts/Caches/*"
+
+Rule_Name="Clear Kernel Cache"
+Rule_Description="This will clear kernel extension cache data."
+Rule_Check="sudo rm -rfv /System/Library/Caches/com.apple.kext.caches/*"
+
+Rule_Name="Clear System Logs and Cache"
+Rule_Description="This will clear various system logs and cache data."
+Rule_Check="sudo rm -rfv /var/log/*"
+
 
 
 
