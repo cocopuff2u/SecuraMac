@@ -24,6 +24,38 @@ skip_descriptions="no"
 terminal_logging=0
 terminal_csv_logging=0
 terminal_csv_plist_logging=0
+Present_User=$(/usr/sbin/scutil <<<"show State:/Users/ConsoleUser" | /usr/bin/awk '/Name :/ && ! /loginwindow/ { print $3 }')
+macOS_version=$(sw_vers -productVersion)
+case "$macOS_version" in
+    15.*)
+        macOS_name="Sequoia"
+        ;;
+    14.*)
+        macOS_name="Sonoma"
+        ;;
+    13.*)
+        macOS_name="Ventura"
+        ;;
+    12.*)
+        macOS_name="Monterey"
+        ;;
+    11.*)
+        macOS_name="Big Sur"
+        ;;
+    10.*)
+        macOS_name="Catalina"
+        ;;
+    *)
+        macOS_name=$(sw_vers -productName)  # Fallback to the default name
+        ;;
+esac
+uptime_output=$(uptime | awk -F'up ' '{print $2}' | awk -F',' '{print $1}')
+hours=$(echo $uptime_output | awk -F':' '{print $1}' | tr -d '[:alpha:]')
+mins=$(echo $uptime_output | awk -F':' '{print $2}' | tr -d '[:alpha:]')
+cpu_model=$(sysctl -n machdep.cpu.brand_string)
+memory_size=$(sysctl -n hw.memsize)
+memory_size_gb=$((memory_size / 1024 / 1024 / 1024))
+
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
@@ -160,7 +192,6 @@ print_bright_blue_bold() {
     printf "%b%s%b\n" "$1" "$(eval "$RESET_FORMAT")"
 }
 
-
 # Clear the screen
 clear
 
@@ -294,6 +325,7 @@ log_settings() {
             print_green ""
             terminal_logging=1
             sys_update_rules
+            user_preference_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -306,6 +338,7 @@ log_settings() {
             print_green ""
             terminal_csv_logging=1
             sys_update_rules
+            user_preference_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -317,6 +350,7 @@ log_settings() {
             print_green ""
             terminal_csv_plist_logging=1
             sys_update_rules
+            user_preference_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -354,7 +388,7 @@ prescript_warning() {
         print_orange_bold "#############################################"
         print_orange ""
         print_orange_bold "      1. Maximize Terminal Window to Full Screen or Largest Possible Size"
-        print_orange_bold "      2. Verify terminal has full disk access"
+        print_orange_bold "      2. Verify terminal has full disk access (Currently not required)"
         print_orange_bold "      3. Data loss is possible; ensure you have a backup"
         print_orange ""
         print_orange ""
@@ -437,13 +471,22 @@ script_main_menu() {
         intro_logo
     else
         intro_logo
-        print_orange_bold "##############################"
-        print_orange_bold "            ALERT!            "
-        print_orange_bold "  Terminal does not have FDA  "
-        print_orange_bold "##############################"
-        print_orange ""
+    # !!Currently no command requires FDA!!
+    #    print_orange_bold "##############################"
+    #   print_orange_bold "            ALERT!            "
+    #    print_orange_bold "  Terminal does not have FDA  "
+    #   print_orange_bold "##############################"
+    #    print_orange ""
     fi
 
+    print_green_bold "##############################"
+    printf "%b" "$(print_green_bold "Current User:") $(print_white_bold "$Present_User")\n"
+    printf "%b" "$(print_green_bold "OS Version:") $(print_white_bold "$macOS_name $macOS_version")\n"
+    printf "%b" "$(print_green_bold "Uptime:") $(print_white_bold "${hours} Hours ${mins} Mins")\n"
+    printf "%b" "$(print_green_bold "CPU:") $(print_white_bold "$cpu_model")\n"
+    printf "%b" "$(print_green_bold "Memory:") $(print_white_bold "${memory_size_gb} GB")\n"
+    print_green_bold "##############################"
+    print_green_bold ""
     print_green_bold "#############################################"
     print_green_bold "# Select an Option:"
     print_green_bold "#############################################"
@@ -456,13 +499,15 @@ script_main_menu() {
     print_green_orange_italic_menu "Provides a detailed report of current system security."
     print_green_bold "4. SecuraMac Guide to Enable Terminal FDA"
     print_green_orange_italic_menu "FDA Not required, but limits some setting options."
-    print_green_bold "5. Exit"
+    print_green_bold "5. Clean System Cache/Data"
+    print_green_orange_italic_menu "Cleans cached user and system files."
+    print_green_bold "6. Exit"
     print_green ""
 
 
     while true; do
         # Print prompt in yellow and read input on the same line
-        printf "%b%bEnter your choice [1-5]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+        printf "%b%bEnter your choice [1-6]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
 
         # Handle user input
         case "$choice" in
@@ -474,6 +519,7 @@ script_main_menu() {
             terminal_csv_logging=0
             terminal_csv_plist_logging=0
             sys_update_rules
+            user_preference_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -489,6 +535,7 @@ script_main_menu() {
             terminal_csv_logging=0
             terminal_csv_plist_logging=0
             sys_update_rules
+            user_preference_rules
             firewall_rules
             Logging_rules
             sys_util_rules
@@ -513,6 +560,13 @@ script_main_menu() {
             break
             ;;
         5)
+            print_green "You selected Clean System Cache/Data..."
+            print_green ""
+            clean_sys_data
+            return_to_main_menu
+            break
+            ;;
+        6)
             print_green "You selected exit SecuraMac..."
             sleep 1
             clear
@@ -520,12 +574,13 @@ script_main_menu() {
             exit 0
             ;;
         *)
-            print_bright_red_bold "invalid choice. Please select a valid option (1-5)."
+            print_bright_red_bold "invalid choice. Please select a valid option (1-6)."
             ;;
         esac
     done
 }
 
+# Execute and Log Function for the Rules
 execute_and_log() {
     local rule_name="$1"
     local rule_recommend="$2"
@@ -649,6 +704,41 @@ execute_and_log() {
         esac
         ((attempt++))
     done
+}
+
+# Clean and Remove Function System Data
+clean_and_rm() {
+    local Rule_Name="$1"
+    local Rule_Description="$2"
+    local Rule_Perform="$3"
+
+    printf "%b%b-> Rule: %b%s%b\n" "$(eval "$BOLD")$(eval "$GREEN")" "$(eval "$BRIGHT_BLUE")" "$Rule_Name" "$(eval "$RESET_FORMAT")"
+    print_green_orange_italic_rule "$Rule_Description"
+
+    printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: This function may delete current user or system-wide data" "$(eval "$RESET_FORMAT")"
+     printf "%b%bPress Z for Main Menu. Do you want to run this cleaner? [Yes/No]: %b" "$(eval "$BRIGHT_BLUE")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read user_input
+
+    case "$user_input" in
+        1|y|Y|yes|YES)
+            print_orange_bold "Running $Rule_Name..."
+            echo "FAKE ENABLING"
+            # eval "$Rule_Perform"
+            print_orange_bold "Completed $Rule_Name..."
+            ;;
+        2|n|N|no|NO)
+            print_green_bold "No changes made..."
+            ;;
+        z|Z)
+            print_green_bold "Proceeding to SecuraMac main menu..."
+            sleep 1
+            clear
+            script_main_menu
+            ;;
+        *)
+            print_red "Invalid input. Please enter 'Yes' or 'No'."
+            ;;
+    esac
+    print_orange_bold ""
 }
 
 firewall_rules() {
@@ -1465,6 +1555,214 @@ sys_update_rules() {
     fi
 }
 
+user_preference_rules() {
+
+    print_bright_blue_bold "# # # # # # # # # # # #"
+    print_bright_blue_bold "#                      "
+    print_bright_blue_bold "# USER PREFERENCE RULES"
+    print_bright_blue_bold "#                      "
+    print_bright_blue_bold "# # # # # # # # # # # #"
+    print_bright_blue_bold ""
+
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    # test
+    else
+        while true; do
+            printf "%b%bWould you like to proceed with configuring user preference rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding..."
+                    print_green ""
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Skipping user preference rules..."
+                    print_green ""
+                    sleep 1
+                    return
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
+            esac
+        done
+
+        if [ "$disable_execute" -eq 0 ]; then
+            while true; do
+            printf "%b{%b%s%b} %b%s%b\n" "$(eval "$RED")" "$(eval "$ORANGE")" "!" "$(eval "$RED")" "$(eval "$ITALIC")" "WARNING: Some rules cannot be disabled once enabled" "$(eval "$RESET_FORMAT")"
+            printf "%b%bWould you like to auto enable all user preference rules? [Yes or No]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+
+            # Process user input
+            case "$choice" in
+                1|y|Y|yes|YES)
+                    print_green "Proceeding with auto enabling all..."
+                    print_green ""
+                    auto_enable=1
+                    sleep 1
+                    # Place the code to execute if the user chooses Yes here
+                    break
+                    ;;
+                2|n|N|no|NO)
+                    print_green "Manually enabling system update rules..."
+                    print_green ""
+                    auto_enable=0
+                    sleep 1
+                    break
+                    ;;
+                *)
+                    print_bright_red_bold "Invalid choice. Please enter y for Yes or n for No."
+                    ;;
+                esac
+            done
+        else
+            auto_enable=0
+        fi
+    fi
+
+    ############################
+
+    Rule_Name="Lock Mac as Soon as Screensaver Starts"
+    Rule_Recommend="Do you want to disable or enable this rule?"
+    Rule_Description="If your screen is black or on screensaver mode, you'll be prompted for a password to login every time."
+    Rule_Check="defaults read /Library/Preferences/com.apple.screensaver | grep -q 'askForPassword' && defaults read /Library/Preferences/com.apple.screensaver | grep -q 'askForPasswordDelay''"
+    Rule_Result="1"
+    Rule_Enable="defaults write /Library/Preferences/com.apple.screensaver askForPassword -int 1 && defaults write /Library/Preferences/com.apple.screensaver askForPasswordDelay -int 0"
+    Rule_Disable="rm /Library/Preferences/com.apple.screensaver.plist"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ##############################################
+    Rule_Name="Display All File Extensions"
+    Rule_Recommend="Do you want to disable or enable this rule?"
+    Rule_Description="This prevents malware from disguising itself as another file type."
+    Rule_Check="defaults read NSGlobalDomain AppleShowAllExtensions"
+    Rule_Result="1"
+    Rule_Enable="defaults write NSGlobalDomain AppleShowAllExtensions -bool true"
+    Rule_Disable="defaults write NSGlobalDomain AppleShowAllExtensions -bool false"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ##############################################
+    Rule_Name="Display Hidden Files in Finder"
+    Rule_Recommend="Do you want to disable or enable this rule?"
+    Rule_Description="This lets you see all files on the system without having to use the terminal."
+    Rule_Check="defaults read /Library/Preferences/com.apple.finder AppleShowAllFiles"
+    Rule_Result="true"
+    Rule_Enable="defaults read ~/com.apple.finder AppleShowAllFiles -bool true"
+    Rule_Disable="defaults read /Library/Preferences/com.apple.finder AppleShowAllFiles -bool false"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ##############################################
+    Rule_Name="Disable Saving to the Cloud by Default"
+    Rule_Recommend="Do you want to disable or enable this rule?"
+    Rule_Description="This prevents sensitive documents from being unintentionally stored on the cloud"
+    Rule_Check="defaults read NSGlobalDomain NSDocumentSaveNewDocumentsToCloud"
+    Rule_Result="0"
+    Rule_Enable="defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false"
+    Rule_Disable="defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool true"
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ##############################################
+    Rule_Name="Prevent Access to Other User's Home Folder's"
+    Rule_Recommend="Do you want to enable this?"
+    Rule_Description="The default behavior of macOS is to allow all valid users access to the top level of every other user's home folder while restricting access only to the Apple default folders within."
+    Rule_Check="/usr/bin/find /System/Volumes/Data/Users -mindepth 1 -maxdepth 1 -type d ! \( -perm 700 -o -perm 711 \) | /usr/bin/grep -v "Shared" | /usr/bin/grep -v \"Guest\" | /usr/bin/wc -l | /usr/bin/xargs"
+    Rule_Result="0"
+    Rule_Enable="IFS=\$\'\n\'; for userDirs in \$\(/usr/bin/find /System/Volumes/Data/Users -mindepth 1 -maxdepth 1 -type d ! \( -perm 700 -o -perm 711 \) | /usr/bin/grep -v \"Shared\" | /usr/bin/grep -v \"Guest\"); do /bin/chmod og-rwx \"\$userDirs\"; done; unset IFS"
+    Rule_Disable=""
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ##############################################
+    Rule_Name="Remove Password Hints From User Accounts"
+    Rule_Recommend="Do you want to enable this?"
+    Rule_Description="Password hints leak information about passwords that are currently in use and can lead to loss of confidentiality."
+    Rule_Check="/usr/bin/dscl . -list /Users hint | /usr/bin/awk '{print \$2}' | /usr/bin/wc -l | /usr/bin/xargs"
+    Rule_Result="0"
+    Rule_Enable="for u in \$\(/usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '\$2 > 500 {print \$1}'); do /usr/bin/dscl . -delete /Users/\$u hint; done"
+    Rule_Disable=""
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ##############################################
+    Rule_Name="System Must Reauthenticate For Priviledge Escalations When Using Sudo Command"
+    Rule_Recommend="Do you want to enable this?"
+    Rule_Description="Without reauthentication, users may access resources or perform tasks for which they do not have authorization. When operating systems provide the capability to escalate a functional capability or change user authenticators, it is critical the user reauthenticate."
+    Rule_Check="/usr/bin/sudo /usr/bin/sudo -V | /usr/bin/grep -c \"Authentication timestamp timeout: 0.0 minutes\""
+    Rule_Result="1"
+    Rule_Enable="/usr/bin/find /etc/sudoers* -type f -exec sed -i '' '/timestamp_timeout/d' '{}' \; && /bin/echo \"Defaults timestamp_timeout=0\" >> /etc/sudoers.d/mscp"
+    Rule_Disable=""
+
+    execute_and_log "$Rule_Name" "$Rule_Recommend" "$Rule_Description" "$Rule_Check" "$Rule_Result" "$Rule_Enable" "$Rule_Disable"
+    ##############################################
+
+    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+        print_green ""
+    fi
+}
+
+clean_sys_data() {
+
+    print_bright_blue_bold "# # # # # # # # # # #"
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# Clean Sys Data     "
+    print_bright_blue_bold "#                    "
+    print_bright_blue_bold "# # # # # # # # # # #"
+    print_bright_blue_bold ""
+
+    Current_User=$(/usr/sbin/scutil <<<"show State:/Users/ConsoleUser" | /usr/bin/awk '/Name :/ && ! /loginwindow/ { print $3 }')
+
+    Rule_Name="Clear QuickLook Metadata"
+    Rule_Description="This will erase spotlight user data."
+    Rule_Perform="rm -rfv /Users/$Current_User/Library/Application\ Support/Quick\ Look/*"
+
+    clean_and_rm "$Rule_Name" "$Rule_Description" "$Rule_Perform"
+    ####################################
+    Rule_Name="Clear Downloads Metadata"
+    Rule_Description="This will clear $Current_User downloads metadata."
+    Rule_Perform="rm -rfv /Users/$Current_User/Library/Application\ Support/Quick\ Look/*"
+
+    clean_and_rm "$Rule_Name" "$Rule_Description" "$Rule_Perform"
+    ####################################
+    Rule_Name="Clear User Cache"
+    Rule_Description="This will clear $Current_User application cache data."
+    Rule_Perform="rm -rfv /Users/$Current_User/Library/Caches/*"
+
+    clean_and_rm "$Rule_Name" "$Rule_Description" "$Rule_Perform"
+    ####################################
+    Rule_Name="Clear System Cache"
+    Rule_Description="This will clear system-wide application cache data."
+    Rule_Perform="sudo rm -rfv /Library/Caches/*"
+
+    clean_and_rm "$Rule_Name" "$Rule_Description" "$Rule_Perform"
+    ####################################
+    Rule_Name="Clear Application Support Cache"
+    Rule_Description="This will clear $Current_User application-specific cache data."
+    Rule_Perform="rm -rfv /Users/$Current_User/Library/Application\ Support/*"
+
+    clean_and_rm "$Rule_Name" "$Rule_Description" "$Rule_Perform"
+    ####################################
+    Rule_Name="Clear Font Cache"
+    Rule_Description="This will clear $Current_User font cache data."
+    Rule_Perform="rm -rfv /Users/$Current_User/Library/Fonts/Caches/*"
+
+    clean_and_rm "$Rule_Name" "$Rule_Description" "$Rule_Perform"
+    ####################################
+    Rule_Name="Clear Kernel Cache"
+    Rule_Description="This will clear system-wide kernel extension cache data."
+    Rule_Perform="sudo rm -rfv /System/Library/Caches/com.apple.kext.caches/*"
+
+    clean_and_rm "$Rule_Name" "$Rule_Description" "$Rule_Perform"
+    ####################################
+    Rule_Name="Clear System Logs and Cache"
+    Rule_Description="This will clear system-wide various system logs and cache data."
+    Rule_Perform="sudo rm -rfv /var/log/*"
+
+    clean_and_rm "$Rule_Name" "$Rule_Description" "$Rule_Perform"
+    ####################################
+}
+
 # Trigger Prescript Warning Variable
 prescript_warning
 
@@ -1472,235 +1770,3 @@ prescript_warning
 script_main_menu
 
 exit 0
-
-
-# Extra Measures
-############################
-
-check_name="V-259514"
-simple_name="Secure_Users_Home_Folders"
-command="/usr/bin/find /System/Volumes/Data/Users -mindepth 1 -maxdepth 1 -type d ! \( -perm 700 -o -perm 711 \) | /usr/bin/grep -v "Shared" | /usr/bin/grep -v \"Guest\" | /usr/bin/wc -l | /usr/bin/xargs"
-expected_result="0"
-fix_command="IFS=\$'\n'
-for userDirs in \$( /usr/bin/find /System/Volumes/Data/Users -mindepth 1 -maxdepth 1 -type d ! \( -perm 700 -o -perm 711 \) | /usr/bin/grep -v \"Shared\" | /usr/bin/grep -v \"Guest\" ); do
-  /bin/chmod og-rwx \"\$userDirs\"
-done
-unset IFS"
-
-IFS=$'\n'; for userDirs in $(/usr/bin/find /System/Volumes/Data/Users -mindepth 1 -maxdepth 1 -type d ! \( -perm 700 -o -perm 711 \) | /usr/bin/grep -v "Shared" | /usr/bin/grep -v "Guest"); do /bin/chmod og-rwx "$userDirs"; done; unset IFS
-
-
-
-check_name="V-259515"
-simple_name="System_Must_Require_Administrator_Privileges_To_Modify_Systemwide_Settings"
-command="authDBs=(\"system.preferences\" \"system.preferences.energysaver\" \"system.preferences.network\" \"system.preferences.printing\" \"system.preferences.sharing\" \"system.preferences.softwareupdate\" \"system.preferences.startupdisk\" \"system.preferences.timemachine\")
-result=\"1\"
-for section in \${authDBs[@]}; do
-  if [[ \$(/usr/bin/security -q authorizationdb read \"\$section\" | /usr/bin/xmllint -xpath 'name(//*[contains(text(), \"shared\")]/following-sibling::*[1])' -) != \"false\" ]]; then
-    result=\"0\"
-  fi
-done
-echo \$result"
-
-authDBs=("system.preferences" "system.preferences.energysaver" "system.preferences.network" "system.preferences.printing" "system.preferences.sharing" "system.preferences.softwareupdate" "system.preferences.startupdisk" "system.preferences.timemachine"); result="1"; for section in "${authDBs[@]}"; do if [[ $(/usr/bin/security -q authorizationdb read "$section" | /usr/bin/xmllint -xpath 'name(//*[contains(text(), "shared")]/following-sibling::*[1])' -) != "false" ]]; then result="0"; fi; done; echo $result
-
-expected_result="1"
-fix_command="authDBs=(\"system.preferences\" \"system.preferences.energysaver\" \"system.preferences.network\" \"system.preferences.printing\" \"system.preferences.sharing\" \"system.preferences.softwareupdate\" \"system.preferences.startupdisk\" \"system.preferences.timemachine\")
-
-for section in \${authDBs[@]}; do
-/usr/bin/security -q authorizationdb read \"\$section\" > \"/tmp/\$section.plist\"
-key_value=\$(/usr/libexec/PlistBuddy -c \"Print :shared\" \"/tmp/\$section.plist\" 2>&1)
-if [[ \"\$key_value\" == *\"Does Not Exist\"* ]]; then
-  /usr/libexec/PlistBuddy -c \"Add :shared bool false\" \"/tmp/\$section.plist\"
-else
-  /usr/libexec/PlistBuddy -c \"Set :shared false\" \"/tmp/\$section.plist\"
-fi
-  /usr/bin/security -q authorizationdb write \"\$section\" < \"/tmp/\$section.plist\"
-done"
-
-authDBs=("system.preferences" "system.preferences.energysaver" "system.preferences.network" "system.preferences.printing" "system.preferences.sharing" "system.preferences.softwareupdate" "system.preferences.startupdisk" "system.preferences.timemachine"); for section in "${authDBs[@]}"; do /usr/bin/security -q authorizationdb read "$section" > "/tmp/$section.plist"; key_value=$(/usr/libexec/PlistBuddy -c "Print :shared" "/tmp/$section.plist" 2>&1); if [[ "$key_value" == *"Does Not Exist"* ]]; then /usr/libexec/PlistBuddy -c "Add :shared bool false" "/tmp/$section.plist"; else /usr/libexec/PlistBuddy -c "Set :shared false" "/tmp/$section.plist"; fi; /usr/bin/security -q authorizationdb write "$section" < "/tmp/$section.plist"; done
-
-
-
-check_name="V-259544"
-simple_name="Remove_Password_Hints_From_User_Accounts"
-command="/usr/bin/dscl . -list /Users hint | /usr/bin/awk '{print \$2}' | /usr/bin/wc -l | /usr/bin/xargs"
-expected_result="0"
-fix_command="for u in \$(/usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '\$2 > 500 {print \$1}'); do
-  /usr/bin/dscl . -delete /Users/\$u hint
-done"
-for u in $(/usr/bin/dscl . -list /Users UniqueID | /usr/bin/awk '$2 > 500 {print $1}'); do /usr/bin/dscl . -delete /Users/$u hint; done
-
-
-
-
-check_name="V-259555"
-simple_name="System_Must_Reauthenticate_For_Priviledge_Escalations_When_Using_Sudo_Command"
-command="/usr/bin/sudo /usr/bin/sudo -V | /usr/bin/grep -c \"Authentication timestamp timeout: 0.0 minutes\""
-expected_result="1"
-fix_command="/usr/bin/find /etc/sudoers* -type f -exec sed -i '' '/timestamp_timeout/d' '{}' \;
-/bin/echo \"Defaults timestamp_timeout=0\" >> /etc/sudoers.d/mscp"
-
-/usr/bin/find /etc/sudoers* -type f -exec sed -i '' '/timestamp_timeout/d' '{}' \; && /bin/echo "Defaults timestamp_timeout=0" >> /etc/sudoers.d/mscp
-
-
-
-
-# SSH Rules
-########################################
-# Requires Full Disk access
-Rule_Name="SSH"
-Rule_Recommend="Do you use SSH?"
-Rule_Description="If no, remote login will be turned off"
-Rule_Check='sudo systemsetup -getremotelogin | grep -q "on" && echo "true" || echo "false"'
-Rule_Enable="sudo systemsetup -f -setremotelogin on"
-Rule_Disable="sudo systemsetup -f -setremotelogin off"
-###########################################
-Rule_Name="Disable Root Login for SSH"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule ensures that SSH does not allow root login by checking the SSH configuration and updating it if necessary."
-Rule_Check="/usr/sbin/sshd -G | /usr/bin/awk '/permitrootlogin/{print \$2}'"
-Rule_Result="no"
-Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; /usr/bin/grep -qxF 'permitrootlogin no' \"\${include_dir}01-mscp-sshd.conf\" 2>/dev/null || echo \"permitrootlogin no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
-Rule_Disable=""
-###########################################
-Rule_Name="Disable Password Authentication For SSH"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This rule ensures that SSH does not allow password-based authentication by checking the SSH configuration and updating it if necessary."
-Rule_Check="/usr/sbin/sshd -G | /usr/bin/grep -Ec '^(passwordauthentication\s+no|kbdinteractiveauthentication\s+no)'"
-Rule_Result="2"
-Rule_Enable="include_dir=\$(/usr/bin/awk '/^Include/ {print \$2}' /etc/ssh/sshd_config | /usr/bin/tr -d '*'); if [[ -z \$include_dir ]]; then /usr/bin/sed -i.bk \"1s/.*/Include \/etc\/ssh\/sshd_config.d\/\*/\" /etc/ssh/sshd_config; fi; echo \"passwordauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; echo \"kbdinteractiveauthentication no\" >> \"\${include_dir}01-mscp-sshd.conf\"; for file in \$(ls \${include_dir}); do if [[ \"\$file\" == \"100-macos.conf\" ]]; then continue; fi; if [[ \"\$file\" == \"01-mscp-sshd.conf\" ]]; then break; fi; /bin/mv \${include_dir}\${file} \${include_dir}20-\${file}; done"
-Rule_Disable=""
-###########################################
-
-
-# Checks Only
-####################################
-Rule_Name="GateKeeper"
-Rule_Recommend="Enable GateKeeper?"
-Rule_Description="Defend against malware by enforcing code signing and verifying downloaded applications before letting them to run"
-Rule_Check='sudo spctl --status'
-
-check_name="V-259570"
-simple_name="Enable_Authenticated_Root"
-command="/usr/bin/csrutil authenticated-root | /usr/bin/grep -c 'enabled'"
-expected_result="1"
-fix_command="/usr/bin/csrutil authenticated-root enable"
-requires_mdm="false"
-
-check_name="V-259575"
-simple_name="Enable_Recovery_Lock"
-command="/usr/libexec/mdmclient QuerySecurityInfo | /usr/bin/grep -c \"IsRecoveryLockEnabled = 1\""
-expected_result="1"
-chip_specific="Apple Only"
-fix_command=""
-requires_mdm="false"
-
-check_name="V-259560"
-simple_name="System_Integrity_Protection_Is_Enabled"
-command="/usr/bin/csrutil status | /usr/bin/grep -c 'System Integrity Protection status: enabled.' && /usr/bin/grep -c \"logger -s -p\" /etc/security/audit_warn "
-expected_result="1
-1"
-fix_command="/usr/bin/csrutil enable"
-requires_mdm="false"
-
-check_name="V-259543"
-simple_name="Enable_Firmware_Password_Intel_Chip"
-command="/usr/sbin/firmwarepasswd -check | /usr/bin/grep -c \"Password Enabled: Yes\""
-
-
-
-# User Personal Preference
-
-Rule_Name="Lock Mac as Soon as Screensaver Starts"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="If your screen is black or on screensaver mode, you'll be prompted for a password to login every time."
-Rule_Check="defaults read /Library/Preferences/com.apple.screensaver | grep -q 'askForPassword' && defaults read /Library/Preferences/com.apple.screensaver | grep -q 'askForPasswordDelay''"
-Rule_Result="1"
-Rule_Enable="defaults write /Library/Preferences/com.apple.screensaver askForPassword -int 1 && defaults write /Library/Preferences/com.apple.screensaver askForPasswordDelay -int 0"
-Rule_Disable="rm /Library/Preferences/com.apple.screensaver.plist"
-
-Rule_Name="Display All File Extensions"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This prevents malware from disguising itself as another file type."
-Rule_Check="defaults read NSGlobalDomain AppleShowAllExtensions"
-Rule_Result="1"
-Rule_Enable="defaults write NSGlobalDomain AppleShowAllExtensions -bool true"
-Rule_Disable="defaults write NSGlobalDomain AppleShowAllExtensions -bool false"
-
-Rule_Name="Display Hidden Files in Finder"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This lets you see all files on the system without having to use the terminal."
-Rule_Check="defaults read /Library/Preferences/com.apple.finder AppleShowAllFiles"
-Rule_Result="true"
-Rule_Enable="defaults read ~/com.apple.finder AppleShowAllFiles -bool true"
-Rule_Disable="defaults read /Library/Preferences/com.apple.finder AppleShowAllFiles -bool false"
-
-Rule_Name="Disable Saving to the Cloud by Default"
-Rule_Recommend="Do you want to disable or enable this rule?"
-Rule_Description="This prevents sensitive documents from being unintentionally stored on the cloud"
-Rule_Check="defaults read NSGlobalDomain NSDocumentSaveNewDocumentsToCloud"
-Rule_Result="0"
-Rule_Enable="defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false"
-Rule_Disable="defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool true"
-
-
-# Cleaning Data
-
-Rule_Name="Clear Language Modeling Metadata"
-Rule_Description="This includes user spelling, typing and suggestion data."
-Rule_Check="rm -rfv ~/Library/LanguageModeling/* ~/Library/Spelling/* ~/Library/Suggestions/*"
-
-Rule_Name="Disable language modeling data collection"
-Rule_Description="This includes user spelling, typing and suggestion data."
-Rule_Check="sudo chmod -R 000 ~/Library/LanguageModeling ~/Library/Spelling ~/Library/Suggestions && sudo chflags -R uchg ~/Library/LanguageModeling ~/Library/Spelling ~/Library/Suggestions"
-
-Rule_Name="Clear QuickLook Metadata"
-Rule_Description="This will erase spotlight user data."
-Rule_Check="rm -rfv ~/Library/Application\ Support/Quick\ Look/*"
-
-Rule_Name="Clear Downloads Metadata"
-Rule_Description="This will erase downloads user data."
-Rule_Check="rm -rfv ~/Library/Application\ Support/Quick\ Look/*"
-
-Rule_Name="Clear User Cache"
-Rule_Description="This will clear user-specific application cache data."
-Rule_Check="rm -rfv ~/Library/Caches/*"
-
-Rule_Name="Clear System Cache"
-Rule_Description="This will clear system-wide application cache data."
-Rule_Check="sudo rm -rfv /Library/Caches/*"
-
-Rule_Name="Clear Application Support Cache"
-Rule_Description="This will clear application-specific cache data."
-Rule_Check="rm -rfv ~/Library/Application\ Support/*"
-
-Rule_Name="Clear Font Cache"
-Rule_Description="This will clear font cache data."
-Rule_Check="rm -rfv ~/Library/Fonts/Caches/*"
-
-Rule_Name="Clear Kernel Cache"
-Rule_Description="This will clear kernel extension cache data."
-Rule_Check="sudo rm -rfv /System/Library/Caches/com.apple.kext.caches/*"
-
-Rule_Name="Clear System Logs and Cache"
-Rule_Description="This will clear various system logs and cache data."
-Rule_Check="sudo rm -rfv /var/log/*"
-
-
-
-
-
-
-
-
-# CANT CONFIRM THESE BELOW
-Rule_Name="Firewall Logging"
-Rule_Check='sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getloggingmode | grep -q "on" && echo "true" || echo "false"'
-Rule_Enable="sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setloggingmode on"
-Rule_Disable="sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setloggingmode off"
-
-Rule_Name="Firewall Logging Detail Level"
-Rule_Check='sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getloggingmode | grep -q "on" && echo "true" || echo "false"'
-Rule_Enable="sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setloggingmode on"
-Rule_Disable="sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setloggingmode off"
