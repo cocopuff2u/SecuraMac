@@ -14,6 +14,7 @@
 # HISTORY
 #
 # 1.0 09/04/24 - Master Release
+# 1.1 09/23/24 - Made it Public
 #
 #
 ####################################################################################################
@@ -24,7 +25,10 @@ skip_descriptions="no"
 terminal_logging=0
 terminal_csv_logging=0
 terminal_csv_plist_logging=0
-Present_User=$(/usr/sbin/scutil <<<"show State:/Users/ConsoleUser" | /usr/bin/awk '/Name :/ && ! /loginwindow/ { print $3 }')
+INITIALIZED_PLIST=0
+INITIALIZED_CSV=0
+Present_User=$(/usr/sbin/scutil <<< "show State:/Users/ConsoleUser" | /usr/bin/awk '/Name :/ && ! /loginwindow/ { print $3 }')
+LOG_PATH="/Users/$Present_User/Desktop/"
 macOS_version=$(sw_vers -productVersion)
 case "$macOS_version" in
     15.*)
@@ -124,7 +128,6 @@ print_green_orange_italic_menu() {
     fi
 }
 
-
 print_orange_bold() {
     eval "$ORANGE"
     eval "$BOLD"
@@ -196,59 +199,96 @@ print_bright_blue_bold() {
 clear
 
 write_to_plist() {
-    local check_name=$1
-    local simple_name=$2
-    local boolean_result=$3
+    local rule_name=$1
+    local rule_description=$2
+    local current_status=$3
 
-    echo '<?xml version="1.0" encoding="UTF-8"?>' >"$PLIST_LOG_FILE"
-    echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >>"$PLIST_LOG_FILE"
-    echo '<plist version="1.0">' >>"$PLIST_LOG_FILE"
-    echo '<dict>' >>"$PLIST_LOG_FILE"
-    echo '</dict>' >>"$PLIST_LOG_FILE"
-    echo '</plist>' >>"$PLIST_LOG_FILE"
-
-    # Create a temporary plist file for processing
-    local temp_plist="/var/log/STIG_Checks_temp.plist"
-
-    # Extract the existing plist content
-    /usr/libexec/PlistBuddy -x -c "Print" "$PLIST_LOG_FILE" >"$temp_plist"
-
-    # Update the plist with the new check result
-    /usr/libexec/PlistBuddy -c "Add :$check_name\_$simple_name dict" "$temp_plist"
-    /usr/libexec/PlistBuddy -c "Add :$check_name\_$simple_name:finding bool $boolean_result" "$temp_plist"
-
-    # Replace the original plist file with the updated one
-    mv "$temp_plist" "$PLIST_LOG_FILE"
-}
-
-write_to_csv() {
-    local check_name="$1"
-    local result="$2"
-    local simple_name="$3"
-    local requires_mdm="$4"
-
-    # Define the header
-    HEADER="Check Name,Simple Name,Result,Requires MDM"
-
-    # Check if the file exists and if it contains the header
-    if [ ! -f "$CSV_LOG_FILE" ]; then
-        # File does not exist; write the header
-        echo "$HEADER" > "$CSV_LOG_FILE"
-    elif ! grep -q "^$HEADER$" "$CSV_LOG_FILE"; then
-        # File exists but does not contain the header; add the header
-        echo "$HEADER" >> "$CSV_LOG_FILE"
+    # Determine the boolean value based on current_status
+    local bool_status
+    if [[ "$current_status" == "Enabled" ]]; then
+        bool_status=true
+    elif [[ "$current_status" == "Disabled" ]]; then
+        bool_status=false
+    else
+        echo "Error: current_status must be 'enabled' or 'disabled'."
+        return 1
     fi
 
-    # Preserve newlines and special characters by quoting the fields
-    local pass_fail
-    if [ "$command_output" = "$expected_result" ]; then
-        pass_fail="Passed"
+    if [ ! -d "$LOG_PATH" ]; then
+    mkdir -p "$LOG_PATH"
+    fi
+
+    PLIST_LOG_PATH="${LOG_PATH%/}/SecuraMac_Results.plist"
+
+    # Clear the file and write the header only on the first run
+    if [[ $INITIALIZED_PLIST -eq 0 ]]; then
+    echo "" >"$PLIST_LOG_PATH"
+    INITIALIZED_PLIST=1  # Set the flag to indicate the file has been initialized
+    fi
+    echo '<?xml version="1.0" encoding="UTF-8"?>' >>"$PLIST_LOG_PATH"
+    echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >>"$PLIST_LOG_PATH"
+    echo '<plist version="1.0">' >>"$PLIST_LOG_PATH"
+    echo '<dict>' >>"$PLIST_LOG_PATH"
+    echo '</dict>' >>"$PLIST_LOG_PATH"
+    echo '</plist>' >>"$PLIST_LOG_PATH"
+
+    # Create a temporary plist file for processing
+    local temp_plist="/var/log/SecuraMac_Results.plist"
+
+    # Extract the existing plist content
+    /usr/libexec/PlistBuddy -x -c "Print" "$PLIST_LOG_PATH" >"$temp_plist"
+
+    # Update the plist with the new check result
+    /usr/libexec/PlistBuddy -c "Add :\"$rule_name\" dict" "$temp_plist"
+    /usr/libexec/PlistBuddy -c "Add :\"$rule_name\":result bool $bool_status" "$temp_plist"
+
+    # Replace the original plist file with the updated one
+    mv "$temp_plist" "$LOG_PATH"
+}
+
+
+write_to_csv() {
+    local rule_name=$1
+    local rule_description=$2
+    local current_status=$3
+
+    if [ ! -d "$LOG_PATH" ]; then
+    mkdir -p "$LOG_PATH"
+    fi
+
+    CSV_LOG_PATH="${LOG_PATH%/}/SecuraMac_Results.csv"
+
+    if [[ "$skip_descriptions" == "yes" ]]; then
+    # Define the header
+    HEADER="Rule Name,Result"
     else
-        pass_fail="Failed"
+    # Write with the rule_description
+    HEADER="Rule Name,Rule Description,Result"
+    fi
+
+    # Clear the file and write the header only on the first run
+    if [[ $INITIALIZED_CSV -eq 0 ]]; then
+        echo "$HEADER" > "$CSV_LOG_PATH"
+        INITIALIZED_CSV=1  # Set the flag to indicate the file has been initialized
+    fi
+
+    # Check if the file exists and if it contains the header
+    if [ ! -f "$CSV_LOG_PATH" ]; then
+        # File does not exist; write the header
+        echo "$HEADER" > "$CSV_LOG_PATH"
+    elif ! grep -q "^$HEADER$" "$CSV_LOG_PATH"; then
+        # File exists but does not contain the header; add the header
+        echo "$HEADER" >> "$CSV_LOG_PATH"
     fi
 
     # Append the data row to the CSV file
-    echo "$check_name,$simple_name,$result,$requires_mdm" >> "$CSV_LOG_FILE"
+    if [[ "$skip_descriptions" == "yes" ]]; then
+        # Write without the rule_description
+        echo "$rule_name,$current_status" >> "$CSV_LOG_PATH"
+    else
+        # Write with the rule_description
+        echo "$rule_name,\"$rule_description\",$current_status" >> "$CSV_LOG_PATH"
+    fi
 }
 
 intro_logo() {
@@ -293,12 +333,49 @@ terminal_fda_guide() {
     exit 0
 }
 
+log_path_change() {
+    print_green_bold "#############################################"
+    print_green_bold "# Please Select an Option:"
+    print_green_bold "#############################################"
+    print_green_bold "1. Set to Default Log Path (/Users/$Present_User/Desktop/)"
+    print_green_bold "2. Change Current Log Path (Current: $LOG_PATH)"
+    print_green_bold ""
+
+    printf "%b%bEnter your choice [1-2]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read option
+
+    case $option in
+        1)
+            LOG_PATH="/Users/$Present_User/Desktop"
+            print_green_bold "Log path set to default: $LOG_PATH..."
+            sleep 1
+            ;;
+        2)
+            print_green_bold ""
+            print_green_bold "Current Log Path is: $LOG_PATH"
+            print_green_bold ""
+            printf "%b%bPlease enter a new path (Example /Users/$Present_User/Desktop/): %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")" ; read new_path
+            LOG_PATH="$new_path"
+            print_green_bold ""
+            print_green_bold "Log path changed to: $LOG_PATH..."
+            sleep 1
+            ;;
+        *)
+            print_bright_red_bold "Invalid option. Please select 1 or 2."
+            print_bright_red_bold ""
+            log_path_change
+            ;;
+    esac
+}
+
 log_settings() {
     clear
     intro_logo
     print_green_bold "#############################################"
     print_green_bold "# Please Select an Option:"
     print_green_bold "#############################################"
+    printf "%b%b{%b!%b} Current Log Path: %b%s%b\n" "$(eval "$BOLD")" "$(eval "$ORANGE")" "$(eval "$RED")" "$(eval "$ORANGE")" "$(eval "$ITALIC")" "$LOG_PATH" "$(eval "$RESET_FORMAT")"
+
+
     print_green ""
 
     print_green_bold "1. Display results in the terminal only"
@@ -310,20 +387,23 @@ log_settings() {
     print_green_bold "3. Display results in the terminal, export to CSV, and Plist"
     print_green_orange_italic_menu "Shows system results and saves them to both CSV and plist files"
 
-    print_green_bold "4. Return to the SecuraMac main menu"
-    print_green_bold "5. Exit SecuraMac"
+    print_green_bold "4. Change Log File Path"
+    print_green_orange_italic_menu "Change the default logging path, Default Path /User/YOURUSERNAME/Desktop"
+
+    print_green_bold "5. Return to the SecuraMac main menu"
+    print_green_bold "6. Exit SecuraMac"
     print_green ""
 
     while true; do
         # Print prompt in yellow and read input on the same line
-        printf "%b%bEnter your choice [1-5]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
+        printf "%b%bEnter your choice [1-6]: %b" "$(eval "$GREEN")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read choice
 
         # Handle user input
         case "$choice" in
         1)
             print_green "You selected terminal logging only...."
             print_green ""
-            terminal_logging=1
+            logging_mode=1
             sys_update_rules
             user_preference_rules
             firewall_rules
@@ -336,7 +416,8 @@ log_settings() {
         2)
             print_green "You selected terminal logging and CSV...."
             print_green ""
-            terminal_csv_logging=1
+            logging_mode=2
+            INITIALIZED_CSV=0
             sys_update_rules
             user_preference_rules
             firewall_rules
@@ -348,7 +429,9 @@ log_settings() {
         3)
             print_green "You selected terminal logging, CSV, and plist...."
             print_green ""
-            terminal_csv_plist_logging=1
+            logging_mode=3
+            INITIALIZED_PLIST=0
+            INITIALIZED_CSV=0
             sys_update_rules
             user_preference_rules
             firewall_rules
@@ -359,6 +442,16 @@ log_settings() {
             # Insert code to perform Task 3
             ;;
         4)
+            print_green "Changing log path..."
+            print_green ""
+            clear
+            log_path_change
+            clear
+            log_settings
+            break
+            # Insert code to perform Task 4
+            ;;
+        5)
             print_green "Returning to main menu..."
             print_green ""
             clear
@@ -366,7 +459,7 @@ log_settings() {
             break
             # Insert code to perform Task 4
             ;;
-        5)
+        6)
             print_green "You selected exit SecuraMac..."
             sleep 1
             clear
@@ -515,9 +608,7 @@ script_main_menu() {
             print_green "You selected Perform Full SecuraMac..."
             print_green ""
             disable_execute=0
-            terminal_logging=0
-            terminal_csv_logging=0
-            terminal_csv_plist_logging=0
+            logging_mode=0
             sys_update_rules
             user_preference_rules
             firewall_rules
@@ -531,9 +622,7 @@ script_main_menu() {
             print_green "You selected Perform Disable SecuraMac..."
             print_green ""
             disable_execute=1
-            terminal_logging=0
-            terminal_csv_logging=0
-            terminal_csv_plist_logging=0
+            logging_mode=0
             sys_update_rules
             user_preference_rules
             firewall_rules
@@ -546,9 +635,7 @@ script_main_menu() {
         3)
             print_green "You selected Full Secura System Report..."
             print_green ""
-            terminal_logging=0
-            terminal_csv_logging=0
-            terminal_csv_plist_logging=0
+            logging_mode=0
             log_settings
             break
             # Insert code to perform Task 4
@@ -624,9 +711,25 @@ execute_and_log() {
     # Print Current Status in parentheses with bold and color
     printf "%bCurrent Status: %b(%b%b%s%b%b\n" "$(eval "$GREEN")" "$(eval "$WHITE")$(eval "$BOLD")" "$status_color_code" "$current_status" "$(eval "$WHITE")$(eval "$BOLD")" ")" "$(eval "$RESET_FORMAT")"
 
-    if [ "$terminal_logging" -eq 1 ]; then
-        return
-    fi
+    case "$logging_mode" in
+        1)
+            return
+            ;;
+        2)
+            write_to_plist "$rule_name" "$rule_description" "$current_status"
+            # Add your action for logging_mode 2 here
+            return
+            ;;
+        3)
+            write_to_plist "$rule_name" "$rule_description" "$current_status"
+            write_to_csv "$rule_name" "$rule_description" "$current_status"
+            # Add your action for logging_mode 3 here
+            return
+            ;;
+        *)
+            # Add your action for logging_mode anything else here
+            ;;
+    esac
 
     if [[ "$skip_descriptions" == "no" ]]; then
         print_green_orange_italic_rule "$rule_description"
@@ -647,8 +750,7 @@ execute_and_log() {
                         print_orange_bold ""
                         print_orange_bold "Enabling the rule..."
                         print_orange_bold ""n
-                        echo "FAKE ENABLING"
-                        # eval "$rule_enable"
+                        eval "$rule_enable"
                         return
                 else
                     printf "%b%bPress Z for Main Menu. Do you want to enable this rule? [Yes/No]: %b" "$(eval "$BRIGHT_BLUE")" "$(eval "$BOLD")" "$(eval "$RESET_FORMAT")"; read user_input
@@ -663,14 +765,12 @@ execute_and_log() {
                         print_orange_bold ""
                         print_orange_bold "Enabling the rule..."
                         print_orange_bold ""
-                        echo "FAKE ENABLING"
-                        # eval "$rule_enable"
+                        eval "$rule_enable"
                     else
                         print_orange_bold ""
                         print_orange_bold "Disabling this rule..."
                         print_orange_bold ""
-                        echo "FAKE DISABLING"
-                        # eval "$rule_disable"
+                        eval "$rule_disable"
                     fi
                 return
                 ;;
@@ -721,8 +821,7 @@ clean_and_rm() {
     case "$user_input" in
         1|y|Y|yes|YES)
             print_orange_bold "Running $Rule_Name..."
-            echo "FAKE ENABLING"
-            # eval "$Rule_Perform"
+            eval "$Rule_Perform"
             print_orange_bold "Completed $Rule_Name..."
             ;;
         2|n|N|no|NO)
@@ -750,7 +849,7 @@ firewall_rules() {
     print_bright_blue_bold "# # # # # # # # # # #"
     print_bright_blue_bold ""
 
-    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    if [[ "$logging_mode" -eq 1 || "$logging_mode" -eq 2 || "$logging_mode" -eq 3 ]]; then
     # test
     else
         while true; do
@@ -844,7 +943,7 @@ Logging_rules() {
     print_bright_blue_bold "# # # # # # # # # # #"
     print_bright_blue_bold ""
 
-    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    if [[ "$logging_mode" -eq 1 || "$logging_mode" -eq 2 || "$logging_mode" -eq 3 ]]; then
     # Place Holder
     else
         while true; do
@@ -1230,7 +1329,7 @@ sys_util_rules() {
     print_bright_blue_bold "#                    "
     print_bright_blue_bold "# # # # # # # # # # #"
     print_bright_blue_bold ""
-    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    if [[ "$logging_mode" -eq 1 || "$logging_mode" -eq 2 || "$logging_mode" -eq 3 ]]; then
     # Place Holder
     else
         while true; do
@@ -1437,7 +1536,7 @@ sys_update_rules() {
     print_bright_blue_bold "# # # # # # # # # # #"
     print_bright_blue_bold ""
 
-    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    if [[ "$logging_mode" -eq 1 || "$logging_mode" -eq 2 || "$logging_mode" -eq 3 ]]; then
     # test
     else
         while true; do
@@ -1564,7 +1663,7 @@ user_preference_rules() {
     print_bright_blue_bold "# # # # # # # # # # # #"
     print_bright_blue_bold ""
 
-    if [[ "$terminal_logging" -eq 1 || "$terminal_csv_logging" -eq 1 || "$terminal_csv_plist_logging" -eq 1 ]]; then
+    if [[ "$logging_mode" -eq 1 || "$logging_mode" -eq 2 || "$logging_mode" -eq 3 ]]; then
     # test
     else
         while true; do
@@ -1658,7 +1757,7 @@ user_preference_rules() {
     ##############################################
     Rule_Name="Disable Saving to the Cloud by Default"
     Rule_Recommend="Do you want to disable or enable this rule?"
-    Rule_Description="This prevents sensitive documents from being unintentionally stored on the cloud"
+    Rule_Description="This prevents sensitive documents from being unintentionally stored on the cloud."
     Rule_Check="defaults read NSGlobalDomain NSDocumentSaveNewDocumentsToCloud"
     Rule_Result="0"
     Rule_Enable="defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false"
