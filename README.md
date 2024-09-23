@@ -1,7 +1,3 @@
-Here’s the updated section with contributions and acknowledgements added at the bottom:
-
----
-
 ![SecuraMac logo](images/github-header-image.png)
 
 ## How to Run SecuraMac
