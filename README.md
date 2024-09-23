@@ -28,7 +28,7 @@ This method allows you to quickly fetch and execute the script in one command. E
 2. **Run the Command**: 
    - Copy and paste the following command into the Terminal and press Enter:
    ```bash
-   sudo zsh <(curl -s https://raw.githubusercontent.com/cocopuff2u/SecuraMac/main/SecuraMac.zsh)
+   sudo zsh -c "$(curl -s https://raw.githubusercontent.com/cocopuff2u/SecuraMac/main/SecuraMac.zsh)"
    ```
    - You will be prompted to enter your password. Type your password (note that it won’t be displayed) and hit Enter.
 
@@ -70,7 +70,7 @@ To customize your experience when running the script, you can use the following 
 
 For example, you can run:
 ```bash
-sudo zsh <(curl -s https://raw.githubusercontent.com/cocopuff2u/SecuraMac/main/SecuraMac.zsh) /y /h
+sudo zsh -c "$(curl -s https://raw.githubusercontent.com/cocopuff2u/SecuraMac/main/SecuraMac.zsh)" /y /h
 ```
 
 ### Important Notes
