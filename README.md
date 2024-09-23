@@ -10,11 +10,9 @@ Here’s the updated section with contributions and acknowledgements added at th
 
 `SecuraMac` is a security enhancement tool designed for macOS, providing a streamlined way to fortify your system's defenses against vulnerabilities and threats. This guide will help you install and run `SecuraMac` easily.
 
-<br>
-<div style="text-align: center;">
-    <img src="images/Example_SecuraMac.gif" alt="GIF demo">
-</div>
-<br>
+<p align="center">
+  <img src="images/Example_SecuraMac.gif" />
+</p>
 
 **Compatibility**: `SecuraMac` is designed/tested for macOS Sequoia and Sonoma. While some rules might function on earlier versions, full compatibility isn't guaranteed.
 
